@@ -1,0 +1,47 @@
+{
+  "cli_version": "0.7.5",
+  "checkpoint_id": "ea07e64f7b31",
+  "session_id": "ses_14369ad8affeSMvX100XKThn31",
+  "strategy": "manual-commit",
+  "created_at": "2026-06-12T17:41:12.454675Z",
+  "branch": "chore/opencode-ci-review-apps",
+  "checkpoints_count": 2,
+  "files_touched": [],
+  "agent": "OpenCode",
+  "model": "claude-opus-4-8",
+  "turn_id": "8ddd0c5b4f71",
+  "token_usage": {
+    "input_tokens": 124,
+    "cache_creation_tokens": 807308,
+    "cache_read_tokens": 4670823,
+    "output_tokens": 111133,
+    "api_call_count": 66
+  },
+  "session_metrics": {
+    "turn_count": 3
+  },
+  "prompt_attributions": [
+    {
+      "checkpoint_number": 2,
+      "user_lines_added": 0,
+      "user_lines_removed": 0,
+      "agent_lines_added": 0,
+      "agent_lines_removed": 0
+    },
+    {
+      "checkpoint_number": 3,
+      "user_lines_added": 403,
+      "user_lines_removed": 0,
+      "agent_lines_added": 2620,
+      "agent_lines_removed": 0,
+      "user_added_per_file": {
+        ".claude/agents/entire-search.md": 25,
+        ".claude/settings.json": 84,
+        ".codex/agents/entire-search.toml": 23,
+        ".codex/config.toml": 3,
+        ".codex/hooks.json": 52,
+        ".opencode/plugins/entire.ts": 216
+      }
+    }
+  ]
+}

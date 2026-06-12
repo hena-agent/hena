@@ -1,0 +1,4 @@
+opencode.jsonc, .agents 폴더, 방금 두 github actions 파일, skills-lock.json 을 커밋, 푸시하고 PR 등록하세요
+
+→ EN: Commit and push opencode.jsonc, the .agents folder, the two GitHub Actions files from just now, and skills-lock.json, then create a PR.
+Commit and push opencode.jsonc, the .agents folder, the two GitHub Actions files from just now, and skills-lock.json, then create a PR.

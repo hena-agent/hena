@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.5",
+  "checkpoint_id": "caf75da23f9b",
+  "strategy": "manual-commit",
+  "branch": "chore/opencode-ci-review",
+  "checkpoints_count": 0,
+  "files_touched": [
+    ".github/workflows/review.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/ca/f75da23f9b/0/metadata.json",
+      "transcript": "/ca/f75da23f9b/0/full.jsonl",
+      "content_hash": "/ca/f75da23f9b/0/content_hash.txt",
+      "prompt": "/ca/f75da23f9b/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 84,
+    "cache_creation_tokens": 201668,
+    "cache_read_tokens": 2396342,
+    "output_tokens": 56804,
+    "api_call_count": 44
+  }
+}

@@ -18,8 +18,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          # Persist the token in git config so the opencode action's own
+          # `git fetch origin` is authenticated (otherwise it fails with
+          # "could not read Username for 'https://github.com'").
           fetch-depth: 1
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Review with GPT-5.5 (variant xhigh)
         uses: ./.github/actions/run-opencode-review
@@ -44,8 +47,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
+          # Persist the token in git config so the opencode action's own
+          # `git fetch origin` is authenticated (otherwise it fails with
+          # "could not read Username for 'https://github.com'").
           fetch-depth: 1
-          persist-credentials: false
+          persist-credentials: true
 
       - name: Review with Claude Opus 4.8 (variant max)
         uses: ./.github/actions/run-opencode-review

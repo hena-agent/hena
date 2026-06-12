@@ -1,0 +1,50 @@
+name: Run OpenCode review
+description: Restore OpenCode auth.json from a secret, then run the OpenCode GitHub action to review a PR with a specific model and variant.
+
+inputs:
+  model:
+    description: Provider/model id (e.g., anthropic/claude-opus-4-8, openai/gpt-5.5)
+    required: true
+  variant:
+    description: Model variant for reasoning effort / thinking budget (e.g., max, xhigh)
+    required: true
+  opencode-auth-json:
+    description: Contents of ~/.local/share/opencode/auth.json (pass via secrets)
+    required: true
+  github-token:
+    description: Token used by the OpenCode action to post review comments
+    required: true
+  prompt:
+    description: Prompt for the OpenCode action
+    required: false
+    default: |
+      Use the `thermo-nuclear-code-quality-review` skill to review it.
+
+runs:
+  using: composite
+  steps:
+    - name: Restore OpenCode auth.json
+      shell: bash
+      env:
+        OPENCODE_AUTH_JSON: ${{ inputs.opencode-auth-json }}
+      run: |
+        set -euo pipefail
+        if [ -z "${OPENCODE_AUTH_JSON}" ]; then
+          echo "::error::OPENCODE_AUTH_JSON is empty. This typically happens for PRs from forks, where repo secrets are not exposed."
+          exit 1
+        fi
+        install -d -m 700 "$HOME/.local/share/opencode"
+        printf '%s' "$OPENCODE_AUTH_JSON" > "$HOME/.local/share/opencode/auth.json"
+        chmod 600 "$HOME/.local/share/opencode/auth.json"
+
+    # Pinned to v1.15.12 (commit 58a27b95c155d3f7d9b9f25b30eb1233bfb0eae5).
+    # Bump intentionally; do not float to @latest or @dev.
+    - name: Run OpenCode
+      uses: anomalyco/opencode/github@58a27b95c155d3f7d9b9f25b30eb1233bfb0eae5
+      env:
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      with:
+        model: ${{ inputs.model }}
+        variant: ${{ inputs.variant }}
+        use_github_token: true
+        prompt: ${{ inputs.prompt }}

@@ -6,23 +6,31 @@ on:
 
 # OPENCODE_AUTH_JSON is a repo secret and is not exposed to PRs from forks.
 # These workflows are intended for same-repo PRs only.
+#
+# Each job mints its own GitHub App installation token so review comments post
+# under a distinct bot identity (hena-gpt-reviewer[bot] / hena-claude-reviewer[bot]).
+# The app token is also used for checkout so the opencode action's own
+# `git fetch origin` is authenticated.
 jobs:
   gpt-review:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
       pull-requests: write
       issues: write
     steps:
+      - name: Mint GPT reviewer app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.GPT_REVIEWER_CLIENT_ID }}
+          private-key: ${{ secrets.GPT_REVIEWER_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # Persist the token in git config so the opencode action's own
-          # `git fetch origin` is authenticated (otherwise it fails with
-          # "could not read Username for 'https://github.com'").
           fetch-depth: 1
-          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Review with GPT-5.5 (variant xhigh)
         uses: ./.github/actions/run-opencode-review
@@ -30,28 +38,31 @@ jobs:
           model: openai/gpt-5.5
           variant: xhigh
           opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           prompt: |
-            Use the `thermo-nuclear-code-quality-review` skill to review it. When adding comments on GitHub, always do so in Korean.
+            Use the `thermo-nuclear-code-quality-review` skill to review it. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
 
-  opus-review:
+  claude-review:
     # Only starts after gpt-review completes successfully.
     needs: gpt-review
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
       contents: read
       pull-requests: write
       issues: write
     steps:
+      - name: Mint Claude reviewer app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ vars.CLAUDE_REVIEWER_CLIENT_ID }}
+          private-key: ${{ secrets.CLAUDE_REVIEWER_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # Persist the token in git config so the opencode action's own
-          # `git fetch origin` is authenticated (otherwise it fails with
-          # "could not read Username for 'https://github.com'").
           fetch-depth: 1
-          persist-credentials: true
+          token: ${{ steps.app-token.outputs.token }}
 
       - name: Review with Claude Opus 4.8 (variant max)
         uses: ./.github/actions/run-opencode-review
@@ -59,6 +70,6 @@ jobs:
           model: anthropic/claude-opus-4-8
           variant: max
           opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ steps.app-token.outputs.token }}
           prompt: |
-            Use the `thermo-nuclear-code-quality-review` skill to review it. First read the PR comments using the gh CLI. When adding comments on GitHub, always do so in Korean.
+            Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.

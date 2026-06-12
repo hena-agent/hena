@@ -37,6 +37,14 @@ runs:
         printf '%s' "$OPENCODE_AUTH_JSON" > "$HOME/.local/share/opencode/auth.json"
         chmod 600 "$HOME/.local/share/opencode/auth.json"
 
+    # Pin the opencode CLI version. The upstream action installs opencode via
+    # https://opencode.ai/install, which honors the VERSION env var; without
+    # this it floats to releases/latest. Writing to $GITHUB_ENV propagates the
+    # pin to the nested action's install step in this job. Bump intentionally.
+    - name: Pin opencode version
+      shell: bash
+      run: echo "VERSION=1.17.4" >> "$GITHUB_ENV"
+
     # Pinned to v1.15.12 (commit 58a27b95c155d3f7d9b9f25b30eb1233bfb0eae5).
     # Bump intentionally; do not float to @latest or @dev.
     - name: Run OpenCode

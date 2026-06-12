@@ -1,0 +1,25 @@
+{
+  "cli_version": "0.7.5",
+  "checkpoint_id": "0b2e4b618ed7",
+  "strategy": "manual-commit",
+  "branch": "chore/opencode-ci-review-pinned",
+  "checkpoints_count": 1,
+  "files_touched": [
+    ".github/actions/run-opencode-review/action.yml"
+  ],
+  "sessions": [
+    {
+      "metadata": "/0b/2e4b618ed7/0/metadata.json",
+      "transcript": "/0b/2e4b618ed7/0/full.jsonl",
+      "content_hash": "/0b/2e4b618ed7/0/content_hash.txt",
+      "prompt": "/0b/2e4b618ed7/0/prompt.txt"
+    }
+  ],
+  "token_usage": {
+    "input_tokens": 165,
+    "cache_creation_tokens": 1035627,
+    "cache_read_tokens": 8473324,
+    "output_tokens": 140898,
+    "api_call_count": 87
+  }
+}

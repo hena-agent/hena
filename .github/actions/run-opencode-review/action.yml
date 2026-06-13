@@ -15,10 +15,8 @@ inputs:
     description: Token used by the OpenCode action to post review comments
     required: true
   prompt:
-    description: Prompt for the OpenCode action
-    required: false
-    default: |
-      Use the `thermo-nuclear-code-quality-review` skill to review it.
+    description: Full review prompt. The single source of truth lives in the caller workflow; this action does not provide a default to avoid drift.
+    required: true
 
 runs:
   using: composite
@@ -37,15 +35,19 @@ runs:
         printf '%s' "$OPENCODE_AUTH_JSON" > "$HOME/.local/share/opencode/auth.json"
         chmod 600 "$HOME/.local/share/opencode/auth.json"
 
-    # Pin the opencode CLI version. The upstream action installs opencode via
-    # https://opencode.ai/install, which honors the VERSION env var; without
-    # this it floats to releases/latest. Writing to $GITHUB_ENV propagates the
-    # pin to the nested action's install step in this job. Bump intentionally.
-    - name: Pin opencode version
+    # Pin the opencode CLI version (distinct from the wrapper-action pin below).
+    # The wrapper action installs opencode via https://opencode.ai/install, which
+    # honors the VERSION env var; writing it to $GITHUB_ENV propagates the pin to
+    # the wrapper's install step. Caveat: the wrapper caches keyed by
+    # releases/latest, so a cache hit can skip the install -- safe here because
+    # every opencode install in this repo flows through this pinned path.
+    # Bump intentionally.
+    - name: Pin opencode CLI version
       shell: bash
       run: echo "VERSION=1.17.4" >> "$GITHUB_ENV"
 
-    # Pinned to v1.15.12 (commit 58a27b95c155d3f7d9b9f25b30eb1233bfb0eae5).
+    # Wrapper GitHub Action pin: commit 58a27b9 = v1.15.12. This is the ACTION
+    # version, NOT the opencode CLI version pinned above (CLI = 1.17.4).
     # Bump intentionally; do not float to @latest or @dev.
     - name: Run OpenCode
       uses: anomalyco/opencode/github@58a27b95c155d3f7d9b9f25b30eb1233bfb0eae5

@@ -1,0 +1,61 @@
+name: _opencode-review
+
+# Reusable workflow: run one opencode PR review under a dedicated GitHub App
+# identity. Called once per model from review.yml. Keeping the shared steps here
+# (token mint + checkout + review) avoids duplicating ~25 lines per job.
+on:
+  workflow_call:
+    inputs:
+      model:
+        description: Provider/model id (e.g., openai/gpt-5.5, anthropic/claude-opus-4-8)
+        required: true
+        type: string
+      variant:
+        description: Model variant (e.g., xhigh, max)
+        required: true
+        type: string
+      app-client-id:
+        description: Client ID of the reviewer's GitHub App (controls the bot identity)
+        required: true
+        type: string
+      prompt:
+        description: Full review prompt (single source of truth for this reviewer)
+        required: true
+        type: string
+    secrets:
+      app-private-key:
+        description: Private key of the reviewer's GitHub App
+        required: true
+      opencode-auth-json:
+        description: Contents of ~/.local/share/opencode/auth.json
+        required: true
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Mint reviewer app token
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        with:
+          client-id: ${{ inputs.app-client-id }}
+          private-key: ${{ secrets.app-private-key }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Review with ${{ inputs.model }} (${{ inputs.variant }})
+        uses: ./.github/actions/run-opencode-review
+        with:
+          model: ${{ inputs.model }}
+          variant: ${{ inputs.variant }}
+          opencode-auth-json: ${{ secrets.opencode-auth-json }}
+          github-token: ${{ steps.app-token.outputs.token }}
+          prompt: ${{ inputs.prompt }}

@@ -4,72 +4,34 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
-# OPENCODE_AUTH_JSON is a repo secret and is not exposed to PRs from forks.
-# These workflows are intended for same-repo PRs only.
-#
-# Each job mints its own GitHub App installation token so review comments post
-# under a distinct bot identity (hena-gpt-reviewer[bot] / hena-claude-reviewer[bot]).
-# The app token is also used for checkout so the opencode action's own
-# `git fetch origin` is authenticated.
+# Same-repo PRs only (OPENCODE_AUTH_JSON is not exposed to fork PRs).
+# Each reviewer runs via the shared _opencode-review.yml reusable workflow and
+# posts under its own GitHub App identity:
+#   gpt-review    -> hena-gpt-reviewer[bot]
+#   claude-review -> hena-claude-reviewer[bot]
 jobs:
   gpt-review:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-    steps:
-      - name: Mint GPT reviewer app token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.GPT_REVIEWER_CLIENT_ID }}
-          private-key: ${{ secrets.GPT_REVIEWER_PRIVATE_KEY }}
-
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Review with GPT-5.5 (variant xhigh)
-        uses: ./.github/actions/run-opencode-review
-        with:
-          model: openai/gpt-5.5
-          variant: xhigh
-          opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
-          github-token: ${{ steps.app-token.outputs.token }}
-          prompt: |
-            Use the `thermo-nuclear-code-quality-review` skill to review it. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+    uses: ./.github/workflows/_opencode-review.yml
+    with:
+      model: openai/gpt-5.5
+      variant: xhigh
+      app-client-id: ${{ vars.GPT_REVIEWER_CLIENT_ID }}
+      prompt: |
+        Use the `thermo-nuclear-code-quality-review` skill to review it. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+    secrets:
+      app-private-key: ${{ secrets.GPT_REVIEWER_PRIVATE_KEY }}
+      opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
 
   claude-review:
     # Only starts after gpt-review completes successfully.
     needs: gpt-review
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
-      issues: write
-    steps:
-      - name: Mint Claude reviewer app token
-        id: app-token
-        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
-        with:
-          client-id: ${{ vars.CLAUDE_REVIEWER_CLIENT_ID }}
-          private-key: ${{ secrets.CLAUDE_REVIEWER_PRIVATE_KEY }}
-
-      - name: Checkout repository
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 1
-          token: ${{ steps.app-token.outputs.token }}
-
-      - name: Review with Claude Opus 4.8 (variant max)
-        uses: ./.github/actions/run-opencode-review
-        with:
-          model: anthropic/claude-opus-4-8
-          variant: max
-          opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
-          github-token: ${{ steps.app-token.outputs.token }}
-          prompt: |
-            Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+    uses: ./.github/workflows/_opencode-review.yml
+    with:
+      model: anthropic/claude-opus-4-8
+      variant: max
+      app-client-id: ${{ vars.CLAUDE_REVIEWER_CLIENT_ID }}
+      prompt: |
+        Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+    secrets:
+      app-private-key: ${{ secrets.CLAUDE_REVIEWER_PRIVATE_KEY }}
+      opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "files": [],
+  "references": [
+    { "path": "./packages/client" },
+    { "path": "./packages/core" },
+    { "path": "./packages/extensions" },
+    { "path": "./packages/hena" },
+    { "path": "./packages/web-ui" }
+  ]
+}

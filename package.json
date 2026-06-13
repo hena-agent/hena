@@ -11,7 +11,7 @@
   "scripts": {
     "build": "turbo run build",
     "check": "biome check . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware && bun run typecheck && bun run test && knip",
-    "ci": "biome ci . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --deny-warnings && bun run typecheck && bun run test:coverage && knip",
+    "ci": "biome ci . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --deny-warnings && bun run typecheck && bun run build && bun run test:coverage && knip",
     "clean": "turbo run clean",
     "coverage": "turbo run test:coverage",
     "format": "biome format --write .",

@@ -1,0 +1,107 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.5.0/schema.json",
+  "assist": {
+    "enabled": true
+  },
+  "files": {
+    "includes": [
+      "*.json",
+      "*.jsonc",
+      "!opencode.jsonc",
+      "*.ts",
+      "packages/**/*.{json,ts,tsx}",
+      "e2e/**/*.{json,ts,tsx}",
+      "!**/coverage",
+      "!**/dist",
+      "!**/node_modules"
+    ]
+  },
+  "plugins": ["./lint/no-classes.grit"],
+  "formatter": {
+    "enabled": true,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineWidth": 80
+  },
+  "javascript": {
+    "formatter": {
+      "quoteStyle": "double",
+      "semicolons": "always",
+      "trailingCommas": "all"
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "preset": "recommended",
+      "complexity": {
+        "noExcessiveCognitiveComplexity": {
+          "level": "error",
+          "options": { "maxAllowedComplexity": 10 }
+        },
+        "noExcessiveLinesPerFunction": {
+          "level": "error",
+          "options": { "maxLines": 60 }
+        },
+        "useMaxParams": {
+          "level": "error",
+          "options": { "max": 4 }
+        }
+      },
+      "correctness": {
+        "noUndeclaredDependencies": "error",
+        "noUnresolvedImports": "error"
+      },
+      "nursery": {
+        "noFloatingPromises": "error",
+        "noMisusedPromises": "error",
+        "useAwaitThenable": "error",
+        "useExplicitType": "error"
+      },
+      "performance": {
+        "noReExportAll": "error"
+      },
+      "security": {
+        "noSecrets": "error"
+      },
+      "style": {
+        "noEnum": "error",
+        "noNonNullAssertion": "error",
+        "noParameterAssign": "error",
+        "noExcessiveLinesPerFile": {
+          "level": "error",
+          "options": { "maxLines": 150 }
+        }
+      },
+      "suspicious": {
+        "noConsole": "error",
+        "noEmptyBlockStatements": "error",
+        "noExplicitAny": "error",
+        "noTsIgnore": "error",
+        "useAwait": "error",
+        "useGuardForIn": "error",
+        "noImportCycles": "error",
+        "noShadow": "error",
+        "noUnnecessaryConditions": "error"
+      }
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts"],
+      "linter": {
+        "rules": {
+          "complexity": {
+            "noExcessiveLinesPerFunction": "off"
+          },
+          "nursery": {
+            "useExplicitType": "off"
+          },
+          "style": {
+            "noExcessiveLinesPerFile": "off"
+          }
+        }
+      }
+    }
+  ]
+}

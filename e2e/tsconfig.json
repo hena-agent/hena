@@ -1,0 +1,10 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "../.turbo/e2e.tsbuildinfo"
+  },
+  "include": ["*.ts", "../packages/core/src/**/*.ts"],
+  "exclude": ["coverage", "../packages/core/src/**/*.test.ts"]
+}

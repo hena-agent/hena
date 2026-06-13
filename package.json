@@ -13,24 +13,28 @@
     "check": "biome check . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware && bun run typecheck && bun run test && knip",
     "ci": "biome ci . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --deny-warnings && bun run typecheck && bun run build && bun run test:coverage && knip",
     "clean": "turbo run clean",
-    "coverage": "turbo run test:coverage",
+    "coverage": "bun run test:coverage",
     "format": "biome format --write .",
     "knip": "knip",
     "lint": "biome check . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware",
     "lint:fix": "biome check --write . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --fix",
-    "test": "turbo run test",
-    "test:coverage": "turbo run test:coverage",
-    "typecheck": "tsgo --noEmit -p tsconfig.root.json && turbo run typecheck"
+    "test": "turbo run test && bun --bun vitest run --config e2e/vitest.config.ts",
+    "test:coverage": "turbo run test:coverage && bun --bun vitest run --coverage --config e2e/vitest.config.ts",
+    "typecheck": "tsgo --noEmit -p tsconfig.root.json && tsgo --noEmit -p e2e/tsconfig.json && turbo run typecheck"
   },
   "devDependencies": {
+    "@ai-sdk/openai": "4.0.0-beta.44",
     "@biomejs/biome": "2.5.0",
     "@types/bun": "1.3.14",
     "@typescript/native-preview": "7.0.0-dev.20260612.1",
     "@vitest/coverage-istanbul": "4.1.8",
+    "ai": "7.0.0-beta.116",
+    "effect": "4.0.0-beta.83",
     "knip": "6.16.1",
     "oxlint": "1.69.0",
     "oxlint-tsgolint": "0.23.0",
     "turbo": "2.9.18",
-    "vitest": "4.1.8"
+    "vitest": "4.1.8",
+    "zod": "4.1.8"
   }
 }

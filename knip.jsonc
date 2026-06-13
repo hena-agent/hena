@@ -1,6 +1,10 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "workspaces": {
+    ".": {
+      "entry": ["e2e/vitest.config.ts"],
+      "project": ["e2e/**/*.ts"]
+    },
     "packages/client": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]

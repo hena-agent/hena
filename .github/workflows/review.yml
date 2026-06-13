@@ -4,6 +4,14 @@ on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
 
+# A called (reusable) workflow cannot exceed the caller's token scopes, and this
+# repo's default workflow permission is read-only. The reusable workflow needs
+# pull-requests/issues write, so grant those scopes explicitly at the caller.
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 # Same-repo PRs only (OPENCODE_AUTH_JSON is not exposed to fork PRs).
 # Each reviewer runs via the shared _opencode-review.yml reusable workflow and
 # posts under its own GitHub App identity:

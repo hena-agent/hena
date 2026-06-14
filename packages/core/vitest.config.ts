@@ -1,3 +1,1 @@
-import config from "../../vitest.shared";
-
-export default config;
+export { default } from "../../vitest.shared";

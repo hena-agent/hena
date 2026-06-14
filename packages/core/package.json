@@ -8,15 +8,15 @@
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/core.d.ts",
+      "default": "./dist/core.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsgo -p tsconfig.build.json && bun build ./src/index.ts --outdir ./dist --target bun --format esm --packages external --sourcemap=external",
+    "build": "tsgo -p tsconfig.build.json && bun build ./src/core.ts --outdir ./dist --target bun --format esm --packages external --sourcemap=external",
     "clean": "rm -rf dist coverage",
     "test": "bun --bun vitest run",
     "test:coverage": "bun --bun vitest run --coverage",

@@ -1,10 +1,9 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Layer } from "effect";
 import {
   type EventSessions,
   eventSessionIterable,
   publishEventToSession,
   registerEventSession,
-  shutdownEventSessions,
   unregisterEventSession,
 } from "./event-log";
 import type { CoreEvent } from "./events";
@@ -20,12 +19,10 @@ export type ToolRegistryService = {
 };
 
 export type EventBusService = {
-  readonly publish: (event: CoreEvent) => Effect.Effect<void>;
-  readonly register: (sessionId: string) => Effect.Effect<void>;
-  readonly stream: (
-    sessionId: string,
-  ) => Effect.Effect<AsyncIterable<CoreEvent>>;
-  readonly unregister: (sessionId: string) => Effect.Effect<void>;
+  readonly publish: (event: CoreEvent) => void;
+  readonly register: (sessionId: string) => void;
+  readonly stream: (sessionId: string) => AsyncIterable<CoreEvent>;
+  readonly unregister: (sessionId: string) => void;
 };
 
 type ProviderId = { readonly ProviderPort: unique symbol };
@@ -69,50 +66,40 @@ function makeToolRegistry(tools: readonly Tool[]): ToolRegistryService {
 function makeEventBusLayer(
   observers: readonly EventObserver[],
 ): Layer.Layer<EventBusId> {
-  return Layer.effect(
-    EventBus,
-    Effect.gen(function* () {
-      const sessions: EventSessions = new Map();
-      yield* Effect.addFinalizer(() => shutdownEventSessions(sessions));
-      return EventBus.of({
-        register: (sessionId: string) =>
-          registerEventSession(sessions, sessionId),
-        publish: (event: CoreEvent) => publish(sessions, observers, event),
-        stream: (sessionId: string) =>
-          eventSessionIterable(sessions, sessionId),
-        unregister: (sessionId: string) =>
-          unregisterEventSession(sessions, sessionId),
-      });
-    }),
-  );
+  return Layer.sync(EventBus, () => {
+    const sessions: EventSessions = new Map();
+    return EventBus.of({
+      register: (sessionId: string) => {
+        registerEventSession(sessions, sessionId);
+      },
+      publish: (event: CoreEvent) => {
+        publish(sessions, observers, event);
+      },
+      stream: (sessionId: string) => eventSessionIterable(sessions, sessionId),
+      unregister: (sessionId: string) => {
+        unregisterEventSession(sessions, sessionId);
+      },
+    });
+  });
 }
 
 function publish(
   sessions: EventSessions,
   observers: readonly EventObserver[],
   event: CoreEvent,
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    yield* publishEventToSession(sessions, event);
-    yield* notifyObservers(observers, event);
-  });
+): void {
+  publishEventToSession(sessions, event);
+  notifyObservers(observers, event);
 }
 
 function notifyObservers(
   observers: readonly EventObserver[],
   event: CoreEvent,
-): Effect.Effect<void> {
+): void {
   const targets = observers.filter((observer) => wantsEvent(observer, event));
-  if (targets.length === 0) {
-    return Effect.succeed(undefined);
+  for (const observer of targets) {
+    void notifyObserver(observer, event);
   }
-  return Effect.promise(async () => {
-    await Promise.all(
-      targets.map(async (observer: EventObserver) => {
-        await notifyObserver(observer, event);
-      }),
-    );
-  });
 }
 
 async function notifyObserver(

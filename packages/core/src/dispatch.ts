@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import type { ToolCall, ToolOutput } from "./common";
 import { errorFromUnknown } from "./common";
-import { type CoreServices, ToolRegistry } from "./services";
+import { type CoreServices, EventBus, ToolRegistry } from "./services";
 import {
   appendEntry,
   emit,
@@ -9,6 +9,7 @@ import {
   now,
   type SessionState,
 } from "./state";
+import { publishToolUpdate } from "./tool-events";
 import { validateInput } from "./tool-validation";
 import type { Tool } from "./tools";
 import type { ToolResultEntry } from "./transcript";
@@ -16,7 +17,6 @@ import type { ToolResultEntry } from "./transcript";
 type ToolRun = {
   readonly isError: boolean;
   readonly output: ToolOutput;
-  readonly updates: readonly ToolOutput[];
 };
 
 type ExecuteToolOptions = {
@@ -52,9 +52,6 @@ function dispatchToolCall(
       tool === undefined
         ? errorRun(`Unknown tool: ${call.name}`)
         : yield* runKnownTool(state, call, tool, signal);
-    for (const partial of run.updates) {
-      yield* emit(state, { partial, toolCallId: call.id, type: "tool_update" });
-    }
     const entry = yield* makeToolResult(state, call, run);
     yield* appendEntry(state, entry);
     yield* emit(state, { entry, type: "tool_end" });
@@ -86,29 +83,30 @@ function executeTool(
   tool: Tool,
   options: ExecuteToolOptions,
 ): Effect.Effect<ToolRun, never, CoreServices> {
-  const updates: ToolOutput[] = [];
-  return Effect.tryPromise({
-    catch: errorFromUnknown,
-    try: async (runtimeSignal: AbortSignal): Promise<ToolOutput> => {
-      const output = await Promise.resolve(
-        tool.execute(options.input, {
-          sessionId: state.id,
-          signal: AbortSignal.any([options.signal, runtimeSignal]),
-          toolCallId: call.id,
-          update: async (partial: ToolOutput): Promise<void> => {
-            updates.push(partial);
-            await Promise.resolve();
-          },
-        }),
-      );
-      return output;
-    },
-  }).pipe(
-    Effect.map(
-      (output) => ({ isError: false, output, updates }) satisfies ToolRun,
-    ),
-    Effect.catch((error) => Effect.succeed(errorRun(error.message, updates))),
-  );
+  return Effect.gen(function* () {
+    const bus = yield* EventBus;
+    return yield* Effect.tryPromise({
+      catch: (cause: unknown) =>
+        errorFromUnknown(cause, { signal: options.signal }),
+      try: async (runtimeSignal: AbortSignal): Promise<ToolOutput> => {
+        const signal = AbortSignal.any([options.signal, runtimeSignal]);
+        const output = await Promise.resolve(
+          tool.execute(options.input, {
+            sessionId: state.id,
+            signal,
+            toolCallId: call.id,
+            update: async (partial: ToolOutput): Promise<void> => {
+              await publishToolUpdate(state, bus, call.id, partial);
+            },
+          }),
+        );
+        return output;
+      },
+    }).pipe(
+      Effect.map((output) => ({ isError: false, output }) satisfies ToolRun),
+      Effect.catch((error) => Effect.succeed(errorRun(error.message))),
+    );
+  });
 }
 
 function makeToolResult(
@@ -127,9 +125,6 @@ function makeToolResult(
   }));
 }
 
-function errorRun(
-  message: string,
-  updates: readonly ToolOutput[] = [],
-): ToolRun {
-  return { isError: true, output: { text: message, type: "text" }, updates };
+function errorRun(message: string): ToolRun {
+  return { isError: true, output: { text: message, type: "text" } };
 }

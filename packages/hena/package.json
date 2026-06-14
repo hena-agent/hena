@@ -7,19 +7,19 @@
     "access": "public"
   },
   "bin": {
-    "hena": "./dist/index.js"
+    "hena": "./dist/hena.js"
   },
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "default": "./dist/index.js"
+      "types": "./dist/hena.d.ts",
+      "default": "./dist/hena.js"
     }
   },
   "files": [
     "dist"
   ],
   "scripts": {
-    "build": "tsgo -p tsconfig.build.json && bun build ./src/index.ts --outdir ./dist --target bun --format esm --packages external --sourcemap=external",
+    "build": "tsgo -p tsconfig.build.json && bun build ./src/hena.ts --outdir ./dist --target bun --format esm --packages external --sourcemap=external",
     "clean": "rm -rf dist coverage",
     "test": "bun --bun vitest run",
     "test:coverage": "bun --bun vitest run --coverage",

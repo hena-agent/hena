@@ -1,5 +1,6 @@
-import { Effect } from "effect";
 import { afterEach, expect, test } from "vitest";
+import { errorFromUnknown } from "./common";
+import { corePackageName } from "./core";
 import {
   type EventSessions,
   eventSessionIterable,
@@ -8,32 +9,66 @@ import {
   shutdownEventSessions,
   unregisterEventSession,
 } from "./event-log";
+import type { Extension, ExtensionAPI } from "./extension";
+import { createRuntime } from "./runtime";
 import {
-  type AssistantPart,
-  type CoreEvent,
-  corePackageName,
-  createRuntime,
-  type Extension,
-  type ExtensionAPI,
-  errorFromUnknown,
-  type HenaRuntime,
-  type ProviderChunk,
-  type ProviderRequest,
-  type ToolDefinition,
-  type TranscriptEntry,
-} from "./index";
+  abortableProvider,
+  abortErrorProvider,
+  uncooperativeProvider,
+} from "./test-support/abort-providers";
+import {
+  capturingProvider,
+  multiTextProvider,
+  providerEndsWithoutFinish,
+  providerError,
+  providerStreamCreationThrows,
+  providerThrows,
+  providerWithFailingCleanup,
+  providerWithFinally,
+  textProvider,
+} from "./test-support/basic-providers";
+import { promptSizedProvider } from "./test-support/prompt-providers";
+import {
+  assistantParts,
+  collectUntilEnd,
+  disposeRuntimes,
+  eventTypes,
+  lastEvent,
+  makeRuntime,
+  messageDeltas,
+  mockEvent,
+  waitForEvent,
+  withTimeout,
+} from "./test-support/runtime";
+import { chunkStream } from "./test-support/streams";
+import {
+  abortableToolProvider,
+  loopingToolProvider,
+  toolProvider,
+  unknownToolProvider,
+} from "./test-support/tool-providers";
+import {
+  abortableTool,
+  doubleTool,
+  emptyToolSchema,
+  failingTool,
+  noopTool,
+  standardTools,
+  standardValueSchema,
+  valueToolSchema,
+} from "./test-support/tools";
+import {
+  failingToolProvider,
+  validationProvider,
+} from "./test-support/validation-providers";
+import { type ToolDefinition, toolDefinition } from "./tools";
+
+afterEach(async () => {
+  await disposeRuntimes();
+});
 
 test("exposes the core package name", () => {
   expect(corePackageName).toBe("@hena-dev/core");
-});
-
-const runtimes: Array<HenaRuntime> = [];
-
-afterEach(async () => {
-  const disposals = runtimes.splice(0).map(async (runtime) => {
-    await runtime.dispose();
-  });
-  await Promise.all(disposals);
 });
 
 test("runs a prompt through a provider extension", async () => {
@@ -125,6 +160,61 @@ test("dispatches extension-registered tools and continues the loop", async () =>
   expect(messageDeltas(events)).toEqual(["calling double", "tool returned 10"]);
 });
 
+test("emits tool updates before tool completion", async () => {
+  let calls = 0;
+  let resolveTool: (() => void) | undefined;
+  const toolDone = new Promise<void>((resolve) => {
+    resolveTool = resolve;
+  });
+  const provider: Extension = (api) => {
+    api.provideProvider({
+      stream: () => {
+        calls += 1;
+        if (calls === 1) {
+          return chunkStream([
+            {
+              toolCall: { id: "call_1", input: {}, name: "slow" },
+              type: "tool_call",
+            },
+            { stopReason: "completed", type: "finish" },
+          ]);
+        }
+        return chunkStream([
+          { text: "finished", type: "text_delta" },
+          { stopReason: "completed", type: "finish" },
+        ]);
+      },
+    });
+  };
+  const slowTool: Extension = (api) => {
+    api.registerTool({
+      description: "Emits progress before finishing.",
+      execute: async (_input, context) => {
+        await context.update({ text: "working", type: "text" });
+        await toolDone;
+        return { text: "done", type: "text" };
+      },
+      name: "slow",
+      parameters: { type: "object" },
+    });
+  };
+  const runtime = await makeRuntime([provider, slowTool]);
+  const session = runtime.createSession();
+  const updatePromise = withTimeout(
+    waitForEvent(session.events, "tool_update"),
+    1_000,
+  );
+  const promptPromise = session.prompt("use slow tool");
+
+  await expect(updatePromise).resolves.toMatchObject({
+    partial: { text: "working", type: "text" },
+    toolCallId: "call_1",
+    type: "tool_update",
+  });
+  resolveTool?.();
+  await promptPromise;
+});
+
 test("supports event observers from extensions", async () => {
   const observed: Array<string> = [];
   const observer: Extension = (api) => {
@@ -141,6 +231,23 @@ test("supports event observers from extensions", async () => {
   await session.prompt("hello");
 
   expect(observed).toEqual(["agent_end"]);
+});
+
+test("does not block emits on async observers", async () => {
+  const hangingObserver: Extension = (api) => {
+    api.on("message_delta", async () => {
+      await new Promise<never>(() => undefined);
+    });
+  };
+  const runtime = await makeRuntime([
+    textProvider("observer should not block"),
+    hangingObserver,
+  ]);
+  const session = runtime.createSession();
+
+  await expect(
+    withTimeout(session.prompt("hello"), 1_000),
+  ).resolves.toBeUndefined();
 });
 
 test("rejects runtime creation without a provider extension", async () => {
@@ -238,6 +345,18 @@ test("disposing an active session aborts the run", async () => {
   });
 });
 
+test("disposing an uncooperative active session does not hang", async () => {
+  const runtime = await makeRuntime([uncooperativeProvider()]);
+  const session = runtime.createSession();
+  const started = waitForEvent(session.events, "message_delta");
+  const running = session.prompt("dispose uncooperative");
+  running.catch(() => undefined);
+
+  await started;
+
+  await expect(withTimeout(session.dispose(), 1_000)).resolves.toBeUndefined();
+});
+
 test("returns an error result for unknown tools", async () => {
   const runtime = await makeRuntime([unknownToolProvider()]);
   const session = runtime.createSession();
@@ -283,10 +402,43 @@ test("sends provider-facing tool schemas without runtime validators", async () =
   await session.prompt("schemas");
 
   expect(seen[0]?.map((tool) => tool.parameters)).toEqual([
-    { type: "object" },
-    { type: "object" },
+    valueToolSchema,
+    emptyToolSchema,
   ]);
   expect(JSON.stringify(seen)).not.toContain("~standard");
+});
+
+test("rejects standard-schema tools without provider schemas", async () => {
+  await expect(
+    makeRuntime([
+      textProvider("unused"),
+      (api) => {
+        Reflect.apply(api.registerTool, api, [
+          {
+            description: "Invalid standard-schema tool.",
+            execute: () => ({ text: "unused", type: "text" }),
+            name: "invalid-standard",
+            parameters: standardValueSchema,
+          },
+        ]);
+      },
+    ]),
+  ).rejects.toThrow(
+    "Standard-schema tool requires provider schema: invalid-standard",
+  );
+});
+
+test("rejects invalid standard-schema tool definitions defensively", () => {
+  expect(() => {
+    Reflect.apply(toolDefinition, undefined, [
+      {
+        description: "Invalid standard-schema tool.",
+        execute: () => ({ text: "unused", type: "text" }),
+        name: "invalid-standard",
+        parameters: standardValueSchema,
+      },
+    ]);
+  }).toThrow("Standard-schema tool requires provider schema: invalid-standard");
 });
 
 test("turns tool failures into tool results", async () => {
@@ -350,7 +502,54 @@ test("normalizes provider stream creation throws as data", async () => {
   });
 });
 
-test("classifies non-error thrown values", () => {
+test("normalizes provider stream creation AbortError throws as aborts", async () => {
+  const provider: Extension = (api) => {
+    api.provideProvider({
+      stream: () => {
+        const error = new Error("The operation was aborted");
+        error.name = "AbortError";
+        throw error;
+      },
+    });
+  };
+  const runtime = await makeRuntime([provider]);
+  const session = runtime.createSession();
+
+  await session.prompt("fail before stream");
+
+  expect(session.transcript()[1]).toMatchObject({
+    stopReason: "aborted",
+  });
+});
+
+test("normalizes provider AbortError throws as aborts", async () => {
+  const runtime = await makeRuntime([abortErrorProvider()]);
+  const session = runtime.createSession();
+  const messageStarted = waitForEvent(session.events, "message_delta");
+  const eventsPromise = collectUntilEnd(session.events);
+  const promptPromise = session.prompt("stop");
+
+  await messageStarted;
+  session.abort();
+  await promptPromise;
+
+  const events = await eventsPromise;
+  expect(lastEvent(events)).toMatchObject({
+    reason: "aborted",
+    type: "agent_end",
+  });
+  expect(session.transcript()[1]).toMatchObject({
+    stopReason: "aborted",
+  });
+});
+
+test("classifies thrown values", () => {
+  const abortError = new Error("aborted");
+  abortError.name = "AbortError";
+  expect(errorFromUnknown(abortError)).toEqual({
+    category: "aborted",
+    message: "aborted",
+  });
   expect(errorFromUnknown("string failure")).toEqual({
     category: "unknown",
     message: "string failure",
@@ -490,8 +689,8 @@ test("replays all buffered events without cross-session leakage", async () => {
 
 test("event iterators close pending reads on return and session shutdown", async () => {
   const sessions: EventSessions = new Map();
-  Effect.runSync(registerEventSession(sessions, "events"));
-  const events = Effect.runSync(eventSessionIterable(sessions, "events"));
+  registerEventSession(sessions, "events");
+  const events = eventSessionIterable(sessions, "events");
   const iterator = events[Symbol.asyncIterator]();
   const pending = iterator.next();
 
@@ -503,7 +702,7 @@ test("event iterators close pending reads on return and session shutdown", async
 
   const closing = events[Symbol.asyncIterator]();
   const closingPending = closing.next();
-  Effect.runSync(unregisterEventSession(sessions, "events"));
+  unregisterEventSession(sessions, "events");
   expect(await withTimeout(closingPending, 1_000)).toEqual({
     done: true,
     value: undefined,
@@ -512,7 +711,7 @@ test("event iterators close pending reads on return and session shutdown", async
 
 test("event iterators handle missing sessions and shutdown", async () => {
   const sessions: EventSessions = new Map();
-  const missing = Effect.runSync(eventSessionIterable(sessions, "missing"));
+  const missing = eventSessionIterable(sessions, "missing");
   const missingIterator = missing[Symbol.asyncIterator]();
 
   expect(await missingIterator.next()).toEqual({
@@ -523,565 +722,10 @@ test("event iterators handle missing sessions and shutdown", async () => {
     done: true,
     value: undefined,
   });
-  Effect.runSync(publishEventToSession(sessions, mockEvent("missing")));
-  Effect.runSync(unregisterEventSession(sessions, "missing"));
-  Effect.runSync(registerEventSession(sessions, "shutdown"));
-  Effect.runSync(publishEventToSession(sessions, mockEvent("shutdown")));
-  Effect.runSync(shutdownEventSessions(sessions));
+  publishEventToSession(sessions, mockEvent("missing"));
+  unregisterEventSession(sessions, "missing");
+  registerEventSession(sessions, "shutdown");
+  publishEventToSession(sessions, mockEvent("shutdown"));
+  shutdownEventSessions(sessions);
   expect(sessions.size).toBe(0);
 });
-
-async function makeRuntime(
-  extensions: ReadonlyArray<Extension>,
-  options: { readonly maxTurns?: number } = {},
-): Promise<HenaRuntime> {
-  const runtime = await createRuntime({ ...options, extensions });
-  runtimes.push(runtime);
-  return runtime;
-}
-
-async function collectUntilEnd(
-  events: AsyncIterable<CoreEvent>,
-): Promise<Array<CoreEvent>> {
-  const collected: Array<CoreEvent> = [];
-  for await (const event of events) {
-    collected.push(event);
-    if (event.type === "agent_end") {
-      return collected;
-    }
-  }
-  return collected;
-}
-
-async function waitForEvent(
-  events: AsyncIterable<CoreEvent>,
-  type: CoreEvent["type"],
-): Promise<CoreEvent> {
-  for await (const event of events) {
-    if (event.type === type) {
-      return event;
-    }
-  }
-  throw new Error(`Event ${type} was not emitted`);
-}
-
-function eventTypes(
-  events: ReadonlyArray<CoreEvent>,
-): Array<CoreEvent["type"]> {
-  return events.map((event) => event.type);
-}
-
-function messageDeltas(events: ReadonlyArray<CoreEvent>): Array<string> {
-  return events.flatMap((event) =>
-    event.type === "message_delta" ? [event.text] : [],
-  );
-}
-
-function lastEvent(events: ReadonlyArray<CoreEvent>): CoreEvent {
-  const last = events.at(-1);
-  if (last === undefined) {
-    throw new Error("Expected at least one event");
-  }
-  return last;
-}
-
-function assistantParts(
-  entry: TranscriptEntry | undefined,
-): readonly AssistantPart[] {
-  if (entry?.role !== "assistant") {
-    throw new Error("Expected an assistant transcript entry");
-  }
-  return entry.parts;
-}
-
-function mockEvent(sessionId: string): CoreEvent {
-  return {
-    schemaVersion: 1,
-    sequence: 1,
-    sessionId,
-    timestamp: "2026-01-01T00:00:00.000Z",
-    type: "agent_start",
-  };
-}
-
-async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  let timeout: ReturnType<typeof setTimeout> | undefined;
-  try {
-    return await Promise.race([
-      promise,
-      new Promise<never>((_resolve, reject) => {
-        timeout = setTimeout(() => {
-          reject(new Error("Timed out waiting for events"));
-        }, ms);
-      }),
-    ]);
-  } finally {
-    if (timeout !== undefined) {
-      clearTimeout(timeout);
-    }
-  }
-}
-
-function chunkStream(
-  chunks: readonly ProviderChunk[],
-): AsyncIterable<ProviderChunk> {
-  return makeChunkStream(chunks);
-}
-
-async function* makeChunkStream(chunks: readonly ProviderChunk[]) {
-  await Promise.resolve();
-  yield* chunks;
-}
-
-async function* throwingStream(error: unknown) {
-  await Promise.resolve();
-  if (error instanceof Error) {
-    throw error;
-  }
-  yield { stopReason: "completed", type: "finish" } satisfies ProviderChunk;
-}
-
-function textProvider(text: string): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () =>
-        chunkStream([
-          { text, type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]),
-    });
-  };
-}
-
-function multiTextProvider(chunks: readonly string[]): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () =>
-        chunkStream([
-          ...chunks.map((text) => ({ text, type: "text_delta" }) as const),
-          { stopReason: "completed", type: "finish" },
-        ]),
-    });
-  };
-}
-
-function providerWithFinally(onClose: () => void): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: async function* () {
-        try {
-          await Promise.resolve();
-          yield { text: "done", type: "text_delta" };
-          yield { stopReason: "completed", type: "finish" };
-        } finally {
-          onClose();
-        }
-      },
-    });
-  };
-}
-
-function providerWithFailingCleanup(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: async function* () {
-        try {
-          await Promise.resolve();
-          yield { stopReason: "completed", type: "finish" };
-        } finally {
-          await failingCleanup();
-        }
-      },
-    });
-  };
-}
-
-async function failingCleanup(): Promise<void> {
-  await Promise.reject(new Error("cleanup failed"));
-}
-
-function toolProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        calls += 1;
-        if (calls === 1) {
-          return chunkStream([
-            { text: "calling double", type: "text_delta" },
-            {
-              toolCall: { id: "call_1", input: { value: 5 }, name: "double" },
-              type: "tool_call",
-            },
-            { stopReason: "completed", type: "finish" },
-          ]);
-        }
-        return chunkStream([
-          { text: "tool returned 10", type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function unknownToolProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        calls += 1;
-        if (calls === 1) {
-          return chunkStream([
-            {
-              toolCall: { id: "call_1", input: {}, name: "missing" },
-              type: "tool_call",
-            },
-            { stopReason: "completed", type: "finish" },
-          ]);
-        }
-        return chunkStream([
-          { text: "continued", type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function validationProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        calls += 1;
-        if (calls === 1) {
-          return chunkStream([
-            {
-              toolCall: { id: "valid", input: { value: 3 }, name: "triple" },
-              type: "tool_call",
-            },
-            {
-              toolCall: { id: "message", input: {}, name: "triple" },
-              type: "tool_call",
-            },
-            {
-              toolCall: {
-                id: "fallback",
-                input: { fallback: true },
-                name: "triple",
-              },
-              type: "tool_call",
-            },
-            {
-              toolCall: { id: "boom", input: {}, name: "schema-boom" },
-              type: "tool_call",
-            },
-            { stopReason: "completed", type: "finish" },
-          ]);
-        }
-        return chunkStream([
-          { text: "validated", type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function failingToolProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        calls += 1;
-        if (calls === 1) {
-          return chunkStream([
-            {
-              toolCall: { id: "call_1", input: {}, name: "boom" },
-              type: "tool_call",
-            },
-            { stopReason: "completed", type: "finish" },
-          ]);
-        }
-        return chunkStream([
-          { text: "saw tool failure", type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function providerError(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () =>
-        chunkStream([
-          {
-            error: { category: "api", message: "provider failed" },
-            stopReason: "error",
-            type: "finish",
-          },
-        ]),
-    });
-  };
-}
-
-function providerThrows(error: Error): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () => throwingStream(error),
-    });
-  };
-}
-
-function providerStreamCreationThrows(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        throw new Error("stream setup failed");
-      },
-    });
-  };
-}
-
-function capturingProvider(seen: ToolDefinition[][]): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: (request: ProviderRequest) => {
-        seen.push([...request.tools]);
-        return chunkStream([
-          { text: "schemas", type: "text_delta" },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function providerEndsWithoutFinish(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: () =>
-        chunkStream([{ text: "done by iterator", type: "text_delta" }]),
-    });
-  };
-}
-
-function abortableProvider(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: async function* (request: ProviderRequest) {
-        yield { text: "partial", type: "text_delta" };
-        await waitForAbort(request.signal);
-        yield { stopReason: "aborted", type: "finish" };
-      },
-    });
-  };
-}
-
-function abortableToolProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: (request: ProviderRequest) => {
-        calls += 1;
-        if (calls === 1) {
-          return chunkStream([
-            {
-              toolCall: { id: "call_1", input: {}, name: "wait-for-abort" },
-              type: "tool_call",
-            },
-            { stopReason: "completed", type: "finish" },
-          ]);
-        }
-        return chunkStream([
-          {
-            stopReason: request.signal.aborted ? "aborted" : "completed",
-            type: "finish",
-          },
-        ]);
-      },
-    });
-  };
-}
-
-function abortableTool(): Extension {
-  return (api) => {
-    api.registerTool({
-      description: "Waits until the session is aborted.",
-      execute: async (_input, context) => {
-        await waitForAbort(context.signal);
-        return { text: "tool aborted", type: "text" };
-      },
-      name: "wait-for-abort",
-      parameters: { type: "object" },
-    });
-  };
-}
-
-function loopingToolProvider(): Extension {
-  let calls = 0;
-  return (api) => {
-    api.provideProvider({
-      stream: () => {
-        calls += 1;
-        return chunkStream([
-          {
-            toolCall: { id: `call_${calls}`, input: {}, name: "noop" },
-            type: "tool_call",
-          },
-          { stopReason: "completed", type: "finish" },
-        ]);
-      },
-    });
-  };
-}
-
-function promptSizedProvider(): Extension {
-  return (api) => {
-    api.provideProvider({
-      stream: (request: ProviderRequest) =>
-        chunkStream(sizedChunks(promptContent(request))),
-    });
-  };
-}
-
-function sizedChunks(prompt: string): readonly ProviderChunk[] {
-  const count = prompt === "flood" ? 300 : 1;
-  const chunks: ProviderChunk[] = [];
-  for (let index = 0; index < count; index += 1) {
-    chunks.push({ text: `delta ${index}`, type: "text_delta" });
-  }
-  chunks.push({ stopReason: "completed", type: "finish" });
-  return chunks;
-}
-
-function promptContent(request: ProviderRequest): string {
-  const message = request.messages.at(-1);
-  if (message?.role === "user") {
-    return message.content;
-  }
-  return "";
-}
-
-function noopTool(): Extension {
-  return (api) => {
-    api.registerTool({
-      description: "Returns a no-op result.",
-      execute: () => ({ text: "ok", type: "text" }),
-      name: "noop",
-      parameters: { type: "object" },
-    });
-  };
-}
-
-function doubleTool(): Extension {
-  return (api) => {
-    api.registerTool({
-      description: "Doubles a numeric value.",
-      execute: async (input, context) => {
-        await context.update({ text: "halfway", type: "text" });
-        return { text: String(readValue(input) * 2), type: "text" };
-      },
-      name: "double",
-      parameters: { type: "object" },
-    });
-  };
-}
-
-function standardTools(): Extension {
-  return (api) => {
-    api.registerTool({
-      description: "Triples a numeric value.",
-      execute: (input) => ({
-        text: String(readValue(input) * 3),
-        type: "text",
-      }),
-      name: "triple",
-      parameters: standardValueSchema,
-    });
-    api.registerTool({
-      description: "Has a validator that throws.",
-      execute: () => ({ text: "unreachable", type: "text" }),
-      name: "schema-boom",
-      parameters: throwingStandardSchema,
-    });
-  };
-}
-
-const standardValueSchema = {
-  "~standard": {
-    validate: (input: unknown) => {
-      if (hasNumericValue(input)) {
-        return { value: input };
-      }
-      if (hasFallbackFlag(input)) {
-        return { issues: [{}] };
-      }
-      return { issues: [{ message: "value is required" }] };
-    },
-  },
-};
-
-const throwingStandardSchema = {
-  "~standard": {
-    validate: () => {
-      throw new Error("schema exploded");
-    },
-  },
-};
-
-function failingTool(): Extension {
-  return (api) => {
-    api.registerTool({
-      description: "Throws for test coverage.",
-      execute: () => {
-        throw new Error("tool failed");
-      },
-      name: "boom",
-      parameters: { type: "object" },
-    });
-  };
-}
-
-function readValue(input: unknown): number {
-  if (hasNumericValue(input)) {
-    return input.value;
-  }
-  return 0;
-}
-
-function hasNumericValue(input: unknown): input is { readonly value: number } {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    "value" in input &&
-    typeof input.value === "number"
-  );
-}
-
-function hasFallbackFlag(input: unknown): input is { readonly fallback: true } {
-  return (
-    typeof input === "object" &&
-    input !== null &&
-    "fallback" in input &&
-    input.fallback === true
-  );
-}
-
-async function waitForAbort(signal: AbortSignal): Promise<void> {
-  if (signal.aborted) {
-    return;
-  }
-  await new Promise<void>((resolve) => {
-    signal.addEventListener(
-      "abort",
-      () => {
-        resolve();
-      },
-      { once: true },
-    );
-  });
-}

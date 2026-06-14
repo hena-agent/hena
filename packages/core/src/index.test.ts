@@ -1,5 +1,7 @@
 import { ManagedRuntime } from "effect";
 import { afterEach, expect, test } from "vitest";
+import { raceAbort } from "./abort-signal";
+import type { ToolOutput } from "./common";
 import { errorFromUnknown } from "./common";
 import { corePackageName } from "./core";
 import { dispatchToolCalls } from "./dispatch";
@@ -12,6 +14,7 @@ import {
   unregisterEventSession,
 } from "./event-log";
 import type { Extension, ExtensionAPI } from "./extension";
+import type { ProviderChunk } from "./provider";
 import { createRuntime } from "./runtime";
 import { makeCoreLayer } from "./services";
 import { makeSessionState } from "./state";
@@ -363,6 +366,88 @@ test("disposing an uncooperative active session does not hang", async () => {
   await expect(withTimeout(session.dispose(), 1_000)).resolves.toBeUndefined();
 });
 
+test("aborts an uncooperative provider read", async () => {
+  const runtime = await makeRuntime([uncooperativeProvider()]);
+  const session = runtime.createSession();
+  const started = waitForEvent(session.events, "message_delta");
+  const eventsPromise = collectUntilEnd(session.events);
+  const running = session.prompt("abort uncooperative");
+
+  await started;
+  session.abort();
+  await withTimeout(running, 1_000);
+
+  expect(lastEvent(await eventsPromise)).toMatchObject({
+    reason: "aborted",
+    type: "agent_end",
+  });
+});
+
+test("ignores provider cleanup failures after aborting a read", async () => {
+  const runtime = await makeRuntime([uncooperativeCleanupProvider()]);
+  const session = runtime.createSession();
+  const started = waitForEvent(session.events, "message_delta");
+  const eventsPromise = collectUntilEnd(session.events);
+  const running = session.prompt("abort cleanup failure");
+
+  await started;
+  session.abort();
+  await withTimeout(running, 1_000);
+  await Promise.resolve();
+
+  expect(lastEvent(await eventsPromise)).toMatchObject({
+    reason: "aborted",
+    type: "agent_end",
+  });
+});
+
+test("preserves explicit abort reasons when racing aborts", async () => {
+  const controller = new AbortController();
+  const cause = new Error("explicit abort");
+  controller.abort(cause);
+
+  await expect(
+    raceAbort(Promise.resolve("unreachable"), controller.signal),
+  ).rejects.toBe(cause);
+});
+
+test("resolves raced operations while the signal stays active", async () => {
+  const controller = new AbortController();
+
+  await expect(
+    raceAbort(Promise.resolve("ok"), controller.signal),
+  ).resolves.toBe("ok");
+});
+
+test("normalizes non-error abort reasons when racing aborts", async () => {
+  const stringAbort = new AbortController();
+  stringAbort.abort("string abort");
+  await expect(
+    raceAbort(Promise.resolve("unreachable"), stringAbort.signal),
+  ).rejects.toMatchObject({ message: "string abort", name: "AbortError" });
+
+  const fallbackAbort = new AbortController();
+  fallbackAbort.abort(123);
+  await expect(
+    raceAbort(Promise.resolve("unreachable"), fallbackAbort.signal),
+  ).rejects.toMatchObject({ message: "Aborted", name: "AbortError" });
+});
+
+test("rejects a pending operation when the signal aborts", async () => {
+  const controller = new AbortController();
+  const pending = raceAbort(
+    new Promise<never>(() => undefined),
+    controller.signal,
+  );
+
+  controller.abort("future abort");
+
+  await expect(pending).rejects.toMatchObject({
+    message: "future abort",
+    name: "AbortError",
+  });
+});
+
 test("returns an error result for unknown tools", async () => {
   const runtime = await makeRuntime([unknownToolProvider()]);
   const session = runtime.createSession();
@@ -451,6 +536,30 @@ test("turns tool failures into tool results", async () => {
   });
 });
 
+test("disposing an uncooperative active tool does not hang", async () => {
+  const runtime = await makeRuntime([
+    uncooperativeToolProvider(),
+    uncooperativeTool(),
+  ]);
+  const session = runtime.createSession();
+  const toolStarted = waitForEvent(session.events, "tool_start");
+  const running = session.prompt("dispose uncooperative tool");
+  running.catch(() => undefined);
+
+  await toolStarted;
+
+  await expect(withTimeout(session.dispose(), 1_000)).resolves.toBeUndefined();
+  await expect(
+    withTimeout(
+      running.then(
+        () => undefined,
+        () => undefined,
+      ),
+      1_000,
+    ),
+  ).resolves.toBeUndefined();
+});
+
 test("does not dispatch tools after the run is already aborted", async () => {
   let executed = false;
   const runtime = ManagedRuntime.make(
@@ -490,6 +599,44 @@ test("does not dispatch tools after the run is already aborted", async () => {
     expect(executed).toBe(false);
   } finally {
     await runtime.dispose();
+  }
+});
+
+test("ignores tool updates after tool execution closes", async () => {
+  let lateUpdate: ((partial: ToolOutput) => Promise<void>) | undefined;
+  const runtime = await makeRuntime([
+    lateUpdateProvider(),
+    (api) => {
+      api.registerTool({
+        description: "Stores the update callback.",
+        execute: (_input, context) => {
+          lateUpdate = context.update;
+          return { text: "done", type: "text" };
+        },
+        name: "late-update",
+        parameters: { type: "object" },
+      });
+    },
+  ]);
+  const session = runtime.createSession();
+
+  await session.prompt("late update");
+  if (lateUpdate === undefined) {
+    throw new Error("Tool update callback was not captured");
+  }
+  await lateUpdate({ text: "too late", type: "text" });
+
+  const iterator = session.events[Symbol.asyncIterator]();
+  try {
+    let event = await iterator.next();
+    while (event.done !== true && event.value.type !== "agent_end") {
+      event = await iterator.next();
+    }
+    await expect(withTimeout(iterator.next(), 100)).rejects.toThrow(
+      "Timed out waiting for events",
+    );
+  } finally {
+    await iterator.return?.();
   }
 });
 
@@ -792,3 +939,85 @@ test("event iterators handle missing sessions and shutdown", async () => {
   shutdownEventSessions(sessions);
   expect(sessions.size).toBe(0);
 });
+
+function lateUpdateProvider(): Extension {
+  let calls = 0;
+  return (api) => {
+    api.provideProvider({
+      stream: () => {
+        calls += 1;
+        if (calls === 1) {
+          return chunkStream([
+            {
+              toolCall: { id: "late_1", input: {}, name: "late-update" },
+              type: "tool_call",
+            },
+            { stopReason: "completed", type: "finish" },
+          ]);
+        }
+        return chunkStream([
+          { text: "late update complete", type: "text_delta" },
+          { stopReason: "completed", type: "finish" },
+        ]);
+      },
+    });
+  };
+}
+
+function uncooperativeToolProvider(): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: () =>
+        chunkStream([
+          {
+            toolCall: { id: "never_1", input: {}, name: "never" },
+            type: "tool_call",
+          },
+          { stopReason: "completed", type: "finish" },
+        ]),
+    });
+  };
+}
+
+function uncooperativeTool(): Extension {
+  return (api) => {
+    api.registerTool({
+      description: "Never resolves and ignores abort.",
+      execute: async (): Promise<ToolOutput> => {
+        await new Promise<never>(() => undefined);
+        return { text: "unreachable", type: "text" };
+      },
+      name: "never",
+      parameters: { type: "object" },
+    });
+  };
+}
+
+function uncooperativeCleanupProvider(): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: () => ({
+        [Symbol.asyncIterator]: () => {
+          let started = false;
+          return {
+            next: async (): Promise<IteratorResult<ProviderChunk>> => {
+              if (!started) {
+                started = true;
+                return {
+                  done: false,
+                  value: { text: "partial", type: "text_delta" },
+                };
+              }
+              await new Promise<never>(() => undefined);
+              return { done: true, value: undefined };
+            },
+            return: async (): Promise<IteratorResult<ProviderChunk>> => {
+              await Promise.resolve();
+              throw new Error("cleanup failed");
+            },
+          };
+        },
+      }),
+    });
+  };
+}

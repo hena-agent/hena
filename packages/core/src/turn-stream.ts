@@ -1,4 +1,5 @@
 import { Effect } from "effect";
+import { raceAbort } from "./abort-signal";
 import type { AgentError, StopReason, TokenUsage, ToolCall } from "./common";
 import { errorFromUnknown } from "./common";
 import type { ProviderChunk } from "./provider";
@@ -38,7 +39,7 @@ export function consumeProviderStream(
       }
       return accumulator;
     } finally {
-      yield* closeIterator(iterator);
+      yield* closeIterator(iterator, signal);
     }
   });
 }
@@ -59,10 +60,16 @@ function openIterator(
 
 function closeIterator(
   iterator: AsyncIterator<ProviderChunk>,
+  signal: AbortSignal,
 ): Effect.Effect<void> {
   return Effect.promise(async () => {
     try {
-      await iterator.return?.();
+      const cleanup = iterator.return?.();
+      if (signal.aborted) {
+        cleanup?.catch(() => undefined);
+        return undefined;
+      }
+      await cleanup;
     } catch {
       return undefined;
     }
@@ -76,7 +83,7 @@ function readNext(
   return Effect.tryPromise({
     catch: (cause: unknown) => errorFromUnknown(cause, { signal }),
     try: async (): Promise<IteratorResult<ProviderChunk>> => {
-      const result = await iterator.next();
+      const result = await raceAbort(iterator.next(), signal);
       return result;
     },
   }).pipe(

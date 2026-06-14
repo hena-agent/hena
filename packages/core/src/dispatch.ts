@@ -9,7 +9,7 @@ import {
   now,
   type SessionState,
 } from "./state";
-import { publishToolUpdate } from "./tool-events";
+import { makeToolUpdateSink } from "./tool-update-sink";
 import { validateInput } from "./tool-validation";
 import type { Tool } from "./tools";
 import type { ToolResultEntry } from "./transcript";
@@ -96,17 +96,20 @@ function executeTool(
         errorFromUnknown(cause, { signal: options.signal }),
       try: async (runtimeSignal: AbortSignal): Promise<ToolOutput> => {
         const signal = AbortSignal.any([options.signal, runtimeSignal]);
-        const output = await Promise.resolve(
-          tool.execute(options.input, {
-            sessionId: state.id,
-            signal,
-            toolCallId: call.id,
-            update: async (partial: ToolOutput): Promise<void> => {
-              await publishToolUpdate(state, bus, call.id, partial);
-            },
-          }),
-        );
-        return output;
+        const updates = makeToolUpdateSink(state, bus, call.id);
+        try {
+          const output = await Promise.resolve(
+            tool.execute(options.input, {
+              sessionId: state.id,
+              signal,
+              toolCallId: call.id,
+              update: updates.update,
+            }),
+          );
+          return output;
+        } finally {
+          await updates.close();
+        }
       },
     }).pipe(
       Effect.map((output) => ({ output, type: "success" }) satisfies ToolRun),

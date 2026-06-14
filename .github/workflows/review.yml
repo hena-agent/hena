@@ -18,7 +18,15 @@ permissions:
 #   gpt-review    -> hena-gpt-reviewer[bot]
 #   claude-review -> hena-claude-reviewer[bot]
 jobs:
+  # Gate: lint, typecheck, build, coverage, and knip must all pass before any
+  # reviewer runs. We run CI as a job here (rather than as a separate workflow
+  # triggered via workflow_run) because the opencode CLI only supports
+  # pull_request/issue events, so review.yml must stay on `pull_request`.
+  ci:
+    uses: ./.github/workflows/ci.yml
+
   gpt-review:
+    needs: ci
     uses: ./.github/workflows/_opencode-review.yml
     with:
       model: openai/gpt-5.5

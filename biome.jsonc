@@ -10,7 +10,7 @@
       "!opencode.jsonc",
       "*.ts",
       "packages/**/*.{json,ts,tsx}",
-      "e2e/**/*.{json,ts,tsx}",
+      "test/e2e/**/*.{json,ts,tsx}",
       "!**/coverage",
       "!**/dist",
       "!**/node_modules"
@@ -70,7 +70,7 @@
         "noParameterAssign": "error",
         "noExcessiveLinesPerFile": {
           "level": "error",
-          "options": { "maxLines": 150 }
+          "options": { "maxLines": 100 }
         }
       },
       "suspicious": {

@@ -6,14 +6,7 @@
     "emitDeclarationOnly": true,
     "noEmit": false,
     "outDir": "${configDir}/dist",
-    "rootDir": "${configDir}/src",
-    "tsBuildInfoFile": "${configDir}/.tsbuildinfo/build.tsbuildinfo"
+    "rootDir": "${configDir}/src"
   },
-  "include": ["${configDir}/src/index.ts"],
-  "exclude": [
-    "${configDir}/coverage",
-    "${configDir}/dist",
-    "${configDir}/src/**/*.test.ts",
-    "${configDir}/src/test-support/**"
-  ]
+  "include": ["${configDir}/src/index.ts"]
 }

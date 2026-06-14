@@ -7,11 +7,11 @@ import { emit, type SessionState } from "./state";
 import type { AssistantPart } from "./transcript";
 
 export type TurnAccumulator = {
-  readonly error: AgentError | undefined;
-  readonly parts: readonly AssistantPart[];
-  readonly stopReason: StopReason;
-  readonly toolCalls: readonly ToolCall[];
-  readonly usage: TokenUsage | undefined;
+  error: AgentError | undefined;
+  readonly parts: AssistantPart[];
+  stopReason: StopReason;
+  readonly toolCalls: ToolCall[];
+  usage: TokenUsage | undefined;
 };
 
 type ReadResult =
@@ -25,18 +25,34 @@ export function consumeProviderStream(
 ): Effect.Effect<TurnAccumulator, never, CoreServices> {
   return Effect.gen(function* () {
     const iterator = stream[Symbol.asyncIterator]();
-    let accumulator = emptyAccumulator();
-    let reading = true;
-    while (reading) {
-      const read = yield* readNext(iterator).pipe(
-        Effect.catch((error) =>
-          Effect.succeed({ error, type: "failed" } as const),
-        ),
-      );
-      accumulator = yield* applyRead(state, accumulator, read);
-      reading = read.type === "chunk" && read.chunk.type !== "finish";
+    const accumulator = emptyAccumulator();
+    try {
+      let reading = true;
+      while (reading) {
+        const read = yield* readNext(iterator).pipe(
+          Effect.catch((error) =>
+            Effect.succeed({ error, type: "failed" } as const),
+          ),
+        );
+        yield* applyRead(state, accumulator, read);
+        reading = read.type === "chunk" && read.chunk.type !== "finish";
+      }
+      return accumulator;
+    } finally {
+      yield* closeIterator(iterator);
     }
-    return accumulator;
+  });
+}
+
+function closeIterator(
+  iterator: AsyncIterator<ProviderChunk>,
+): Effect.Effect<void> {
+  return Effect.promise(async () => {
+    try {
+      await iterator.return?.();
+    } catch {
+      return undefined;
+    }
   });
 }
 
@@ -62,15 +78,14 @@ function applyRead(
   state: SessionState,
   accumulator: TurnAccumulator,
   read: ReadResult,
-): Effect.Effect<TurnAccumulator, never, CoreServices> {
+): Effect.Effect<void, never, CoreServices> {
   if (read.type === "done") {
-    return Effect.succeed(accumulator);
+    return Effect.succeed(undefined);
   }
   if (read.type === "failed") {
-    return Effect.succeed({
-      ...accumulator,
-      error: read.error,
-      stopReason: "error",
+    return Effect.sync(() => {
+      accumulator.error = read.error;
+      accumulator.stopReason = "error";
     });
   }
   return applyChunk(state, accumulator, read.chunk);
@@ -80,43 +95,42 @@ function applyChunk(
   state: SessionState,
   accumulator: TurnAccumulator,
   chunk: ProviderChunk,
-): Effect.Effect<TurnAccumulator, never, CoreServices> {
+): Effect.Effect<void, never, CoreServices> {
   if (chunk.type === "finish") {
-    return Effect.succeed({
-      ...accumulator,
-      error: chunk.error,
-      stopReason: chunk.stopReason,
-      usage: chunk.usage,
+    return Effect.sync(() => {
+      accumulator.error = chunk.error;
+      accumulator.stopReason = chunk.stopReason;
+      accumulator.usage = chunk.usage;
     });
   }
-  const next = appendProviderPart(accumulator, chunk);
+  appendProviderPart(accumulator, chunk);
   if (chunk.type === "tool_call") {
-    return Effect.succeed(next);
+    return Effect.succeed(undefined);
   }
   return Effect.map(
     emit(state, { text: chunk.text, type: "message_delta" }),
-    () => next,
+    () => undefined,
   );
 }
 
 function appendProviderPart(
   accumulator: TurnAccumulator,
   chunk: Exclude<ProviderChunk, { readonly type: "finish" }>,
-): TurnAccumulator {
+): void {
   if (chunk.type === "tool_call") {
-    return {
-      ...accumulator,
-      parts: [
-        ...accumulator.parts,
-        { toolCall: chunk.toolCall, type: "tool_call" },
-      ],
-      toolCalls: [...accumulator.toolCalls, chunk.toolCall],
-    };
+    accumulator.parts.push({ toolCall: chunk.toolCall, type: "tool_call" });
+    accumulator.toolCalls.push(chunk.toolCall);
+    return;
   }
-  return {
-    ...accumulator,
-    parts: [...accumulator.parts, { text: chunk.text, type: "text" }],
-  };
+  const previous = accumulator.parts.at(-1);
+  if (previous?.type === "text") {
+    accumulator.parts[accumulator.parts.length - 1] = {
+      text: `${previous.text}${chunk.text}`,
+      type: "text",
+    };
+    return;
+  }
+  accumulator.parts.push({ text: chunk.text, type: "text" });
 }
 
 function emptyAccumulator(): TurnAccumulator {

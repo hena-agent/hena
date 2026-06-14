@@ -1,7 +1,10 @@
-import type { CoreEvent } from "../packages/core/src/events";
-import type { Extension } from "../packages/core/src/extension";
-import { createRuntime, type HenaRuntime } from "../packages/core/src/runtime";
-import type { Session } from "../packages/core/src/session";
+import {
+  type CoreEvent,
+  createRuntime,
+  type Extension,
+  type HenaRuntime,
+  type Session,
+} from "../packages/core/src/index";
 
 export type E2EHarness = {
   readonly close: () => Promise<void>;

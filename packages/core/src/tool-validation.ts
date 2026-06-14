@@ -14,26 +14,21 @@ export function validateInput(
   if (!isStandardSchema(parameters)) {
     return Effect.succeed({ input, type: "valid" });
   }
-  return Effect.map(
-    Effect.tryPromise({
-      catch: errorFromUnknown,
-      try: async (): Promise<StandardResult> => {
-        const result = await Promise.resolve(
-          parameters["~standard"].validate(input),
-        );
-        return result;
-      },
-    }).pipe(Effect.catch((error) => Effect.succeed(toInvalid(error.message)))),
-    (result) => validationFromStandard(result),
+  return Effect.tryPromise({
+    catch: errorFromUnknown,
+    try: async (): Promise<StandardResult> => {
+      const result = await Promise.resolve(
+        parameters["~standard"].validate(input),
+      );
+      return result;
+    },
+  }).pipe(
+    Effect.map((result) => validationFromStandard(result)),
+    Effect.catch((error) => Effect.succeed(toInvalid(error.message))),
   );
 }
 
-function validationFromStandard(
-  result: StandardResult | Validation,
-): Validation {
-  if ("type" in result) {
-    return result;
-  }
+function validationFromStandard(result: StandardResult): Validation {
   if ("issues" in result) {
     return toInvalid(issueMessage(result));
   }

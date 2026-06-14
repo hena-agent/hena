@@ -22,7 +22,7 @@ export type StandardSchema = {
 
 export type ToolParameters = JsonSchema | StandardSchema;
 
-type ToolContext = {
+export type ToolContext = {
   readonly sessionId: string;
   readonly signal: AbortSignal;
   readonly toolCallId: string;

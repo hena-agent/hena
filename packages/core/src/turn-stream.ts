@@ -3,6 +3,7 @@ import { raceAbort } from "./abort-signal";
 import type { AgentError, StopReason, TokenUsage, ToolCall } from "./common";
 import { errorFromUnknown } from "./common";
 import type { ProviderChunk } from "./provider";
+import { closeProviderIterator } from "./provider-cleanup";
 import {
   finishFromError,
   finishFromMissingFinish,
@@ -39,7 +40,7 @@ export function consumeProviderStream(
       }
       return accumulator;
     } finally {
-      yield* closeIterator(iterator, signal);
+      yield* closeProviderIterator(iterator, signal);
     }
   });
 }
@@ -58,24 +59,6 @@ function openIterator(
   );
 }
 
-function closeIterator(
-  iterator: AsyncIterator<ProviderChunk>,
-  signal: AbortSignal,
-): Effect.Effect<void> {
-  return Effect.promise(async () => {
-    try {
-      const cleanup = iterator.return?.();
-      if (signal.aborted) {
-        cleanup?.catch(() => undefined);
-        return undefined;
-      }
-      await cleanup;
-    } catch {
-      return undefined;
-    }
-  });
-}
-
 function readNext(
   iterator: AsyncIterator<ProviderChunk>,
   signal: AbortSignal,
@@ -83,7 +66,10 @@ function readNext(
   return Effect.tryPromise({
     catch: (cause: unknown) => errorFromUnknown(cause, { signal }),
     try: async (): Promise<IteratorResult<ProviderChunk>> => {
-      const result = await raceAbort(iterator.next(), signal);
+      const result = await raceAbort(async () => {
+        const next = await iterator.next();
+        return next;
+      }, signal);
       return result;
     },
   }).pipe(

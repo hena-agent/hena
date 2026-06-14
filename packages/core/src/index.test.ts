@@ -405,17 +405,26 @@ test("preserves explicit abort reasons when racing aborts", async () => {
   const controller = new AbortController();
   const cause = new Error("explicit abort");
   controller.abort(cause);
+  let started = false;
 
   await expect(
-    raceAbort(Promise.resolve("unreachable"), controller.signal),
+    raceAbort(async () => {
+      await Promise.resolve();
+      started = true;
+      return "unreachable";
+    }, controller.signal),
   ).rejects.toBe(cause);
+  expect(started).toBe(false);
 });
 
 test("resolves raced operations while the signal stays active", async () => {
   const controller = new AbortController();
 
   await expect(
-    raceAbort(Promise.resolve("ok"), controller.signal),
+    raceAbort(async () => {
+      await Promise.resolve();
+      return "ok";
+    }, controller.signal),
   ).resolves.toBe("ok");
 });
 
@@ -423,22 +432,27 @@ test("normalizes non-error abort reasons when racing aborts", async () => {
   const stringAbort = new AbortController();
   stringAbort.abort("string abort");
   await expect(
-    raceAbort(Promise.resolve("unreachable"), stringAbort.signal),
+    raceAbort(async () => {
+      await Promise.resolve();
+      return "unreachable";
+    }, stringAbort.signal),
   ).rejects.toMatchObject({ message: "string abort", name: "AbortError" });
 
   const fallbackAbort = new AbortController();
   fallbackAbort.abort(123);
   await expect(
-    raceAbort(Promise.resolve("unreachable"), fallbackAbort.signal),
+    raceAbort(async () => {
+      await Promise.resolve();
+      return "unreachable";
+    }, fallbackAbort.signal),
   ).rejects.toMatchObject({ message: "Aborted", name: "AbortError" });
 });
 
 test("rejects a pending operation when the signal aborts", async () => {
   const controller = new AbortController();
-  const pending = raceAbort(
-    new Promise<never>(() => undefined),
-    controller.signal,
-  );
+  const pending = raceAbort(async () => {
+    await new Promise<never>(() => undefined);
+  }, controller.signal);
 
   controller.abort("future abort");
 

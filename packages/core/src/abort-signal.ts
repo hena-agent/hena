@@ -1,5 +1,5 @@
 export async function raceAbort<T>(
-  operation: Promise<T>,
+  operation: () => Promise<T>,
   signal: AbortSignal,
 ): Promise<T> {
   if (signal.aborted) {
@@ -14,7 +14,7 @@ export async function raceAbort<T>(
   };
   signal.addEventListener("abort", onAbort, { once: true });
   try {
-    return await Promise.race([operation, abort]);
+    return await Promise.race([operation(), abort]);
   } finally {
     signal.removeEventListener("abort", onAbort);
   }

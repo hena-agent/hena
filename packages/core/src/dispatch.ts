@@ -91,27 +91,24 @@ function executeTool(
 ): Effect.Effect<ToolRun, never, CoreServices> {
   return Effect.gen(function* () {
     const bus = yield* EventBus;
+    const updates = makeToolUpdateSink(state, bus, call.id);
     return yield* Effect.tryPromise({
       catch: (cause: unknown) =>
         errorFromUnknown(cause, { signal: options.signal }),
       try: async (runtimeSignal: AbortSignal): Promise<ToolOutput> => {
         const signal = AbortSignal.any([options.signal, runtimeSignal]);
-        const updates = makeToolUpdateSink(state, bus, call.id);
-        try {
-          const output = await Promise.resolve(
-            tool.execute(options.input, {
-              sessionId: state.id,
-              signal,
-              toolCallId: call.id,
-              update: updates.update,
-            }),
-          );
-          return output;
-        } finally {
-          await updates.close();
-        }
+        const output = await Promise.resolve(
+          tool.execute(options.input, {
+            sessionId: state.id,
+            signal,
+            toolCallId: call.id,
+            update: updates.update,
+          }),
+        );
+        return output;
       },
     }).pipe(
+      Effect.ensuring(Effect.promise(updates.close)),
       Effect.map((output) => ({ output, type: "success" }) satisfies ToolRun),
       Effect.catch((error) => Effect.succeed(toolRunFromError(error))),
     );

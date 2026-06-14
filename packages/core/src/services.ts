@@ -1,4 +1,12 @@
-import { Context, Effect, Layer, PubSub, Stream } from "effect";
+import { Context, Effect, Layer } from "effect";
+import {
+  type EventSessions,
+  eventSessionIterable,
+  publishEventToSession,
+  registerEventSession,
+  shutdownEventSessions,
+  unregisterEventSession,
+} from "./event-log";
 import type { CoreEvent } from "./events";
 import type { EventObserver } from "./extension";
 import type { Provider } from "./provider";
@@ -13,9 +21,11 @@ export type ToolRegistryService = {
 
 export type EventBusService = {
   readonly publish: (event: CoreEvent) => Effect.Effect<void>;
+  readonly register: (sessionId: string) => Effect.Effect<void>;
   readonly stream: (
     sessionId: string,
-  ) => Effect.Effect<Stream.Stream<CoreEvent>>;
+  ) => Effect.Effect<AsyncIterable<CoreEvent>>;
+  readonly unregister: (sessionId: string) => Effect.Effect<void>;
 };
 
 type ProviderId = { readonly ProviderPort: unique symbol };
@@ -62,55 +72,28 @@ function makeEventBusLayer(
   return Layer.effect(
     EventBus,
     Effect.gen(function* () {
-      const sessions = new Map<string, PubSub.PubSub<CoreEvent>>();
-      yield* Effect.addFinalizer(() => shutdownSessions(sessions));
+      const sessions: EventSessions = new Map();
+      yield* Effect.addFinalizer(() => shutdownEventSessions(sessions));
       return EventBus.of({
+        register: (sessionId: string) =>
+          registerEventSession(sessions, sessionId),
         publish: (event: CoreEvent) => publish(sessions, observers, event),
-        stream: (sessionId: string) => sessionStream(sessions, sessionId),
+        stream: (sessionId: string) =>
+          eventSessionIterable(sessions, sessionId),
+        unregister: (sessionId: string) =>
+          unregisterEventSession(sessions, sessionId),
       });
     }),
   );
 }
 
-function shutdownSessions(
-  sessions: Map<string, PubSub.PubSub<CoreEvent>>,
-): Effect.Effect<void> {
-  return Effect.gen(function* () {
-    for (const pubsub of sessions.values()) {
-      yield* PubSub.shutdown(pubsub);
-    }
-  });
-}
-
-function sessionStream(
-  sessions: Map<string, PubSub.PubSub<CoreEvent>>,
-  sessionId: string,
-): Effect.Effect<Stream.Stream<CoreEvent>> {
-  return Effect.map(sessionPubSub(sessions, sessionId), Stream.fromPubSub);
-}
-
-function sessionPubSub(
-  sessions: Map<string, PubSub.PubSub<CoreEvent>>,
-  sessionId: string,
-): Effect.Effect<PubSub.PubSub<CoreEvent>> {
-  const existing = sessions.get(sessionId);
-  if (existing !== undefined) {
-    return Effect.succeed(existing);
-  }
-  return Effect.map(PubSub.unbounded<CoreEvent>({ replay: 256 }), (pubsub) => {
-    sessions.set(sessionId, pubsub);
-    return pubsub;
-  });
-}
-
 function publish(
-  sessions: Map<string, PubSub.PubSub<CoreEvent>>,
+  sessions: EventSessions,
   observers: readonly EventObserver[],
   event: CoreEvent,
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
-    const pubsub = yield* sessionPubSub(sessions, event.sessionId);
-    yield* PubSub.publish(pubsub, event);
+    yield* publishEventToSession(sessions, event);
     yield* notifyObservers(observers, event);
   });
 }

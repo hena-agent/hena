@@ -25,9 +25,31 @@ export async function createRuntime(
     makeCoreLayer(collected.provider, collected.tools, collected.observers),
   );
   const context = await managed.context();
+  const sessions = new Set<Session>();
+  let sessionCounter = 1;
   return {
-    createSession: () => makeSession(managed, context, maxTurns),
+    createSession: () => {
+      const id = `session_${sessionCounter}`;
+      sessionCounter += 1;
+      let session: Session;
+      session = makeSession({
+        context,
+        id,
+        maxTurns,
+        onDispose: () => {
+          sessions.delete(session);
+        },
+        runtime: managed,
+      });
+      sessions.add(session);
+      return session;
+    },
     dispose: async (): Promise<void> => {
+      await Promise.all(
+        Array.from(sessions, async (session) => {
+          await session.dispose();
+        }),
+      );
       await managed.dispose();
     },
   };

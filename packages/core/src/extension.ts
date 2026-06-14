@@ -7,7 +7,7 @@ export type EventObserver = {
   readonly type: CoreEventType | "event";
 };
 
-type ExtensionAPI = {
+export type ExtensionAPI = {
   readonly on: (
     type: CoreEventType | "event",
     handler: (event: CoreEvent) => Promise<void> | void,

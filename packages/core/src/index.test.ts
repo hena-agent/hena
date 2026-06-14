@@ -1,11 +1,25 @@
+import { Effect } from "effect";
 import { afterEach, expect, test } from "vitest";
-
-import { errorFromUnknown } from "./common";
-import type { CoreEvent } from "./events";
-import type { Extension } from "./extension";
-import { corePackageName } from "./index";
-import type { ProviderChunk, ProviderRequest } from "./provider";
-import { createRuntime, type HenaRuntime } from "./runtime";
+import {
+  type EventSessions,
+  eventSessionIterable,
+  publishEventToSession,
+  registerEventSession,
+  shutdownEventSessions,
+  unregisterEventSession,
+} from "./event-log";
+import {
+  type AssistantPart,
+  type CoreEvent,
+  corePackageName,
+  createRuntime,
+  type Extension,
+  errorFromUnknown,
+  type HenaRuntime,
+  type ProviderChunk,
+  type ProviderRequest,
+  type TranscriptEntry,
+} from "./index";
 
 test("exposes the core package name", () => {
   expect(corePackageName).toBe("@hena-dev/core");
@@ -47,6 +61,21 @@ test("runs a prompt through a provider extension", async () => {
     parts: [{ text: "hello from model", type: "text" }],
     stopReason: "completed",
   });
+});
+
+test("coalesces streamed text deltas into one assistant part", async () => {
+  const chunks = ["hello", " ", "from", " stream"];
+  const runtime = await makeRuntime([multiTextProvider(chunks)]);
+  const session = runtime.createSession();
+  const eventsPromise = collectUntilEnd(session.events);
+
+  await session.prompt("hello");
+
+  const events = await eventsPromise;
+  expect(messageDeltas(events)).toEqual(chunks);
+  expect(assistantParts(session.transcript()[1])).toEqual([
+    { text: "hello from stream", type: "text" },
+  ]);
 });
 
 test("dispatches extension-registered tools and continues the loop", async () => {
@@ -137,6 +166,34 @@ test("rejects a second prompt while a run is active", async () => {
   );
   session.abort();
   await running;
+});
+
+test("disposes sessions and rejects further prompts", async () => {
+  const runtime = await makeRuntime([textProvider("unused")]);
+  const session = runtime.createSession();
+
+  await session.dispose();
+  await session.dispose();
+
+  await expect(session.prompt("after dispose")).rejects.toThrow(
+    "Session is disposed",
+  );
+});
+
+test("disposing an active session aborts the run", async () => {
+  const runtime = await makeRuntime([abortableProvider()]);
+  const session = runtime.createSession();
+  const started = waitForEvent(session.events, "message_delta");
+  const running = session.prompt("dispose active");
+
+  await started;
+  await session.dispose();
+  await running;
+
+  expect(lastEvent(await collectUntilEnd(session.events))).toMatchObject({
+    reason: "aborted",
+    type: "agent_end",
+  });
 });
 
 test("returns an error result for unknown tools", async () => {
@@ -248,6 +305,32 @@ test("treats a provider stream ending without finish as completed", async () => 
   });
 });
 
+test("closes provider streams after a finish chunk", async () => {
+  let closed = false;
+  const runtime = await makeRuntime([
+    providerWithFinally(() => {
+      closed = true;
+    }),
+  ]);
+  const session = runtime.createSession();
+
+  await session.prompt("close stream");
+
+  expect(closed).toBe(true);
+});
+
+test("ignores provider cleanup failures", async () => {
+  const runtime = await makeRuntime([providerWithFailingCleanup()]);
+  const session = runtime.createSession();
+
+  await session.prompt("cleanup failure");
+
+  expect(session.transcript()[1]).toMatchObject({
+    role: "assistant",
+    stopReason: "completed",
+  });
+});
+
 test("aborts an active run", async () => {
   const runtime = await makeRuntime([abortableProvider()]);
   const session = runtime.createSession();
@@ -309,7 +392,7 @@ test("stops looping tool calls at the configured max turn count", async () => {
   ).toHaveLength(2);
 });
 
-test("keeps event replay buffers isolated per session", async () => {
+test("replays all buffered events without cross-session leakage", async () => {
   const runtime = await makeRuntime([promptSizedProvider()]);
   const quiet = runtime.createSession();
   const flood = runtime.createSession();
@@ -317,8 +400,9 @@ test("keeps event replay buffers isolated per session", async () => {
   await quiet.prompt("quiet");
   await flood.prompt("flood");
 
-  const events = await withTimeout(collectUntilEnd(quiet.events), 1_000);
-  expect(eventTypes(events)).toEqual([
+  const quietEvents = await withTimeout(collectUntilEnd(quiet.events), 1_000);
+  const floodEvents = await withTimeout(collectUntilEnd(flood.events), 1_000);
+  expect(eventTypes(quietEvents)).toEqual([
     "user_message",
     "agent_start",
     "turn_start",
@@ -328,8 +412,55 @@ test("keeps event replay buffers isolated per session", async () => {
     "turn_end",
     "agent_end",
   ]);
-  expect(events.every((event) => event.sessionId === quiet.id)).toBe(true);
-  expect(lastEvent(events)).toMatchObject({ reason: "completed" });
+  expect(quietEvents.every((event) => event.sessionId === quiet.id)).toBe(true);
+  expect(floodEvents.every((event) => event.sessionId === flood.id)).toBe(true);
+  expect(messageDeltas(floodEvents)).toHaveLength(300);
+  expect(assistantParts(flood.transcript()[1])).toHaveLength(1);
+  expect(lastEvent(quietEvents)).toMatchObject({ reason: "completed" });
+  expect(lastEvent(floodEvents)).toMatchObject({ reason: "completed" });
+});
+
+test("event iterators close pending reads on return and session shutdown", async () => {
+  const sessions: EventSessions = new Map();
+  Effect.runSync(registerEventSession(sessions, "events"));
+  const events = Effect.runSync(eventSessionIterable(sessions, "events"));
+  const iterator = events[Symbol.asyncIterator]();
+  const pending = iterator.next();
+
+  expect(await iterator.return?.()).toEqual({ done: true, value: undefined });
+  expect(await withTimeout(pending, 1_000)).toEqual({
+    done: true,
+    value: undefined,
+  });
+
+  const closing = events[Symbol.asyncIterator]();
+  const closingPending = closing.next();
+  Effect.runSync(unregisterEventSession(sessions, "events"));
+  expect(await withTimeout(closingPending, 1_000)).toEqual({
+    done: true,
+    value: undefined,
+  });
+});
+
+test("event iterators handle missing sessions and shutdown", async () => {
+  const sessions: EventSessions = new Map();
+  const missing = Effect.runSync(eventSessionIterable(sessions, "missing"));
+  const missingIterator = missing[Symbol.asyncIterator]();
+
+  expect(await missingIterator.next()).toEqual({
+    done: true,
+    value: undefined,
+  });
+  expect(await missingIterator.next()).toEqual({
+    done: true,
+    value: undefined,
+  });
+  Effect.runSync(publishEventToSession(sessions, mockEvent("missing")));
+  Effect.runSync(unregisterEventSession(sessions, "missing"));
+  Effect.runSync(registerEventSession(sessions, "shutdown"));
+  Effect.runSync(publishEventToSession(sessions, mockEvent("shutdown")));
+  Effect.runSync(shutdownEventSessions(sessions));
+  expect(sessions.size).toBe(0);
 });
 
 async function makeRuntime(
@@ -386,6 +517,25 @@ function lastEvent(events: ReadonlyArray<CoreEvent>): CoreEvent {
   return last;
 }
 
+function assistantParts(
+  entry: TranscriptEntry | undefined,
+): readonly AssistantPart[] {
+  if (entry?.role !== "assistant") {
+    throw new Error("Expected an assistant transcript entry");
+  }
+  return entry.parts;
+}
+
+function mockEvent(sessionId: string): CoreEvent {
+  return {
+    schemaVersion: 1,
+    sequence: 1,
+    sessionId,
+    timestamp: "2026-01-01T00:00:00.000Z",
+    type: "agent_start",
+  };
+}
+
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
@@ -433,6 +583,53 @@ function textProvider(text: string): Extension {
         ]),
     });
   };
+}
+
+function multiTextProvider(chunks: readonly string[]): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: () =>
+        chunkStream([
+          ...chunks.map((text) => ({ text, type: "text_delta" }) as const),
+          { stopReason: "completed", type: "finish" },
+        ]),
+    });
+  };
+}
+
+function providerWithFinally(onClose: () => void): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: async function* () {
+        try {
+          await Promise.resolve();
+          yield { text: "done", type: "text_delta" };
+          yield { stopReason: "completed", type: "finish" };
+        } finally {
+          onClose();
+        }
+      },
+    });
+  };
+}
+
+function providerWithFailingCleanup(): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: async function* () {
+        try {
+          await Promise.resolve();
+          yield { stopReason: "completed", type: "finish" };
+        } finally {
+          await failingCleanup();
+        }
+      },
+    });
+  };
+}
+
+async function failingCleanup(): Promise<void> {
+  await Promise.reject(new Error("cleanup failed"));
 }
 
 function toolProvider(): Extension {

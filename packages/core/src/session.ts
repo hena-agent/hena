@@ -1,7 +1,6 @@
-import { Context, Fiber, Stream } from "effect";
+import { Context, Fiber } from "effect";
 import type { ManagedRuntime } from "effect/ManagedRuntime";
 import type { CoreEvent } from "./events";
-import { nextSessionId } from "./ids";
 import { runPromptLoop } from "./loop";
 import { type CoreServices, EventBus } from "./services";
 import { makeSessionState, transcriptSnapshot } from "./state";
@@ -9,7 +8,8 @@ import type { TranscriptEntry } from "./transcript";
 
 export type Session = {
   readonly abort: () => void;
-  /** Each new iteration replays this session's buffered events. */
+  readonly dispose: () => Promise<void>;
+  /** Each new iteration replays this session's buffered events until disposed. */
   readonly events: AsyncIterable<CoreEvent>;
   readonly id: string;
   readonly prompt: (input: string) => Promise<void>;
@@ -21,20 +21,26 @@ type ActiveRun = {
   readonly fiber: Fiber.Fiber<void>;
 };
 
-export function makeSession(
-  runtime: ManagedRuntime<CoreServices, never>,
-  context: Context.Context<CoreServices>,
-  maxTurns: number,
-): Session {
-  const id = nextSessionId();
+type MakeSessionOptions = {
+  readonly context: Context.Context<CoreServices>;
+  readonly id: string;
+  readonly maxTurns: number;
+  readonly onDispose: () => void;
+  readonly runtime: ManagedRuntime<CoreServices, never>;
+};
+
+export function makeSession(options: MakeSessionOptions): Session {
+  const { context, id, maxTurns, onDispose, runtime } = options;
   const state = runtime.runSync(makeSessionState(id));
   const bus = Context.get(context, EventBus);
-  const events = Stream.toAsyncIterableWith(
-    runtime.runSync(bus.stream(id)),
-    context,
-  );
+  runtime.runSync(bus.register(id));
+  const events = runtime.runSync(bus.stream(id));
   let active: ActiveRun | undefined;
+  let disposed = false;
   const promptInput = async (input: string): Promise<void> => {
+    if (disposed) {
+      throw new Error("Session is disposed");
+    }
     if (active !== undefined) {
       throw new Error("Session already has an active run");
     }
@@ -49,8 +55,21 @@ export function makeSession(
       active = undefined;
     }
   };
+  const dispose = async (): Promise<void> => {
+    if (disposed) {
+      return;
+    }
+    disposed = true;
+    active?.controller.abort();
+    if (active !== undefined) {
+      await runtime.runPromise(Fiber.join(active.fiber));
+    }
+    await runtime.runPromise(bus.unregister(id));
+    onDispose();
+  };
   return {
     abort: () => active?.controller.abort(),
+    dispose,
     events,
     id,
     prompt: promptInput,

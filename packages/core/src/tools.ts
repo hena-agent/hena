@@ -1,6 +1,12 @@
 import type { ToolOutput } from "./common";
 
-type JsonSchema = {
+export type JsonSchema = {
+  readonly additionalProperties?: boolean | JsonSchema;
+  readonly description?: string;
+  readonly enum?: readonly unknown[];
+  readonly items?: JsonSchema;
+  readonly properties?: { readonly [key: string]: JsonSchema };
+  readonly required?: readonly string[];
   readonly type?: string;
 };
 
@@ -37,20 +43,28 @@ export type Tool = {
   ) => Promise<ToolOutput> | ToolOutput;
   readonly name: string;
   readonly parameters: ToolParameters;
+  readonly schema?: JsonSchema;
 };
 
 export type ToolDefinition = {
   readonly description: string;
   readonly name: string;
-  readonly parameters: ToolParameters;
+  readonly parameters: JsonSchema;
 };
 
 export function toolDefinition(tool: Tool): ToolDefinition {
   return {
     description: tool.description,
     name: tool.name,
-    parameters: tool.parameters,
+    parameters: tool.schema ?? providerSchema(tool.parameters),
   };
+}
+
+function providerSchema(parameters: ToolParameters): JsonSchema {
+  if (isStandardSchema(parameters)) {
+    return { type: "object" };
+  }
+  return parameters;
 }
 
 export function isStandardSchema(

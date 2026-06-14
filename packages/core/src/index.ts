@@ -22,6 +22,7 @@ import {
 } from "./runtime";
 import type { Session } from "./session";
 import type {
+  JsonSchema,
   Tool,
   ToolContext,
   ToolDefinition,
@@ -49,6 +50,7 @@ export type {
   Extension,
   ExtensionAPI,
   HenaRuntime,
+  JsonSchema,
   ModelMessage,
   ModelPart,
   Provider,

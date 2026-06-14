@@ -16,12 +16,12 @@ export type TurnAccumulator = {
 
 type ReadResult =
   | { readonly chunk: ProviderChunk; readonly type: "chunk" }
-  | { readonly type: "done" }
-  | { readonly error: AgentError; readonly type: "failed" };
+  | { readonly type: "done" };
 
 export function consumeProviderStream(
   state: SessionState,
   stream: AsyncIterable<ProviderChunk>,
+  signal: AbortSignal,
 ): Effect.Effect<TurnAccumulator, never, CoreServices> {
   return Effect.gen(function* () {
     const iterator = stream[Symbol.asyncIterator]();
@@ -29,11 +29,7 @@ export function consumeProviderStream(
     try {
       let reading = true;
       while (reading) {
-        const read = yield* readNext(iterator).pipe(
-          Effect.catch((error) =>
-            Effect.succeed({ error, type: "failed" } as const),
-          ),
-        );
+        const read = yield* readNext(iterator, signal);
         yield* applyRead(state, accumulator, read);
         reading = read.type === "chunk" && read.chunk.type !== "finish";
       }
@@ -58,20 +54,32 @@ function closeIterator(
 
 function readNext(
   iterator: AsyncIterator<ProviderChunk>,
-): Effect.Effect<ReadResult, AgentError> {
-  return Effect.map(
-    Effect.tryPromise({
-      catch: errorFromUnknown,
-      try: async (): Promise<IteratorResult<ProviderChunk>> => {
-        const result = await iterator.next();
-        return result;
-      },
-    }),
-    (result) =>
-      result.done === true
-        ? { type: "done" }
-        : { chunk: result.value, type: "chunk" },
+  signal: AbortSignal,
+): Effect.Effect<ReadResult> {
+  return Effect.tryPromise({
+    catch: (cause: unknown) => errorFromUnknown(cause, { signal }),
+    try: async (): Promise<IteratorResult<ProviderChunk>> => {
+      const result = await iterator.next();
+      return result;
+    },
+  }).pipe(
+    Effect.map(
+      (result): ReadResult =>
+        result.done === true
+          ? { type: "done" }
+          : { chunk: result.value, type: "chunk" },
+    ),
+    Effect.catch((error) =>
+      Effect.succeed({ chunk: finishFromError(error), type: "chunk" } as const),
+    ),
   );
+}
+
+function finishFromError(error: AgentError): ProviderChunk {
+  if (error.category === "aborted") {
+    return { stopReason: "aborted", type: "finish" };
+  }
+  return { error, stopReason: "error", type: "finish" };
 }
 
 function applyRead(
@@ -81,12 +89,6 @@ function applyRead(
 ): Effect.Effect<void, never, CoreServices> {
   if (read.type === "done") {
     return Effect.succeed(undefined);
-  }
-  if (read.type === "failed") {
-    return Effect.sync(() => {
-      accumulator.error = read.error;
-      accumulator.stopReason = "error";
-    });
   }
   return applyChunk(state, accumulator, read.chunk);
 }

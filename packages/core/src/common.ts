@@ -32,12 +32,23 @@ export type ToolOutput = {
   readonly type: "text";
 };
 
-export function errorFromUnknown(cause: unknown): AgentError {
+export function errorFromUnknown(
+  cause: unknown,
+  options: { readonly signal?: AbortSignal } = {},
+): AgentError {
+  const category =
+    options.signal?.aborted === true || isAbortError(cause)
+      ? "aborted"
+      : "unknown";
   if (cause instanceof Error) {
-    return { category: "unknown", message: cause.message };
+    return { category, message: cause.message };
   }
   if (typeof cause === "string") {
-    return { category: "unknown", message: cause };
+    return { category, message: cause };
   }
-  return { category: "unknown", message: "Unknown error" };
+  return { category, message: "Unknown error" };
+}
+
+function isAbortError(cause: unknown): boolean {
+  return cause instanceof Error && cause.name === "AbortError";
 }

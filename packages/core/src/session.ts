@@ -29,12 +29,14 @@ type MakeSessionOptions = {
   readonly runtime: ManagedRuntime<CoreServices, never>;
 };
 
+const DISPOSE_ABORT_GRACE_MS = 10;
+
 export function makeSession(options: MakeSessionOptions): Session {
   const { context, id, maxTurns, onDispose, runtime } = options;
   const state = runtime.runSync(makeSessionState(id));
   const bus = Context.get(context, EventBus);
-  runtime.runSync(bus.register(id));
-  const events = runtime.runSync(bus.stream(id));
+  bus.register(id);
+  const events = bus.stream(id);
   let active: ActiveRun | undefined;
   let disposed = false;
   const promptInput = async (input: string): Promise<void> => {
@@ -60,11 +62,16 @@ export function makeSession(options: MakeSessionOptions): Session {
       return;
     }
     disposed = true;
-    active?.controller.abort();
-    if (active !== undefined) {
-      await runtime.runPromise(Fiber.join(active.fiber));
+    const running = active;
+    active = undefined;
+    running?.controller.abort();
+    if (running !== undefined) {
+      const settled = await waitForActiveRun(runtime, running);
+      if (!settled) {
+        runtime.runFork(Fiber.interrupt(running.fiber));
+      }
     }
-    await runtime.runPromise(bus.unregister(id));
+    bus.unregister(id);
     onDispose();
   };
   return {
@@ -75,4 +82,23 @@ export function makeSession(options: MakeSessionOptions): Session {
     prompt: promptInput,
     transcript: () => runtime.runSync(transcriptSnapshot(state)),
   };
+}
+
+async function waitForActiveRun(
+  runtime: ManagedRuntime<CoreServices, never>,
+  active: ActiveRun,
+): Promise<boolean> {
+  const joined = runtime.runPromise(Fiber.join(active.fiber)).then(
+    () => true,
+    () => true,
+  );
+  const settled = await Promise.race([joined, delay(DISPOSE_ABORT_GRACE_MS)]);
+  return settled;
+}
+
+async function delay(ms: number): Promise<false> {
+  await new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
+  return false;
 }

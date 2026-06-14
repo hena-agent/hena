@@ -1,6 +1,6 @@
 import { Effect, Ref } from "effect";
 import type { CoreEvent, EventPayload } from "./events";
-import { type CoreServices, EventBus, type EventBusService } from "./services";
+import { type CoreServices, EventBus } from "./services";
 import type { TranscriptEntry, UserEntry } from "./transcript";
 
 export type SessionState = {
@@ -63,16 +63,6 @@ export function emit(
 ): Effect.Effect<CoreEvent, never, CoreServices> {
   return Effect.gen(function* () {
     const bus = yield* EventBus;
-    return yield* emitWithBus(state, bus, payload);
-  });
-}
-
-function emitWithBus(
-  state: SessionState,
-  bus: EventBusService,
-  payload: EventPayload,
-): Effect.Effect<CoreEvent> {
-  return Effect.gen(function* () {
     const sequence = yield* Ref.getAndUpdate(
       state.sequence,
       (value) => value + 1,
@@ -84,7 +74,7 @@ function emitWithBus(
       sessionId: state.id,
       timestamp: now(),
     };
-    yield* bus.publish(event);
+    bus.publish(event);
     return event;
   });
 }

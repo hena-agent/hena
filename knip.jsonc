@@ -6,23 +6,23 @@
       "project": ["e2e/**/*.ts"]
     },
     "packages/client": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/client.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/core": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/core.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/extensions": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/extensions.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/hena": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/hena.ts"],
       "project": ["src/**/*.ts"]
     },
     "packages/web-ui": {
-      "entry": ["src/index.ts"],
+      "entry": ["src/web-ui.ts"],
       "project": ["src/**/*.ts"]
     }
   }

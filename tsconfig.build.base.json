@@ -8,5 +8,11 @@
     "rootDir": "${configDir}/src",
     "tsBuildInfoFile": "${configDir}/dist/build.tsbuildinfo"
   },
-  "include": ["${configDir}/src/index.ts"]
+  "include": ["${configDir}/src/**/*.ts"],
+  "exclude": [
+    "${configDir}/coverage",
+    "${configDir}/dist",
+    "${configDir}/src/**/*.test.ts",
+    "${configDir}/src/test-support/**"
+  ]
 }

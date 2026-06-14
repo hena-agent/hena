@@ -1,10 +1,10 @@
 import { afterEach, expect, test } from "vitest";
+import type { CoreEvent } from "../packages/core/src/events";
+import type { Extension } from "../packages/core/src/extension";
 import type {
-  CoreEvent,
-  Extension,
   ProviderChunk,
   ProviderRequest,
-} from "../packages/core/src/index";
+} from "../packages/core/src/provider";
 import { createE2EHarness, type E2EHarness } from "./harness";
 
 const harnesses: Array<E2EHarness> = [];

@@ -35,16 +35,26 @@ export type ToolContext = {
   readonly update: (partial: ToolOutput) => Promise<void>;
 };
 
-export type Tool = {
+type ToolBase = {
   readonly description: string;
   readonly execute: (
     input: unknown,
     context: ToolContext,
   ) => Promise<ToolOutput> | ToolOutput;
   readonly name: string;
-  readonly parameters: ToolParameters;
-  readonly schema?: JsonSchema;
 };
+
+export type Tool = ToolBase &
+  (
+    | {
+        readonly parameters: JsonSchema;
+        readonly schema?: JsonSchema;
+      }
+    | {
+        readonly parameters: StandardSchema;
+        readonly schema: JsonSchema;
+      }
+  );
 
 export type ToolDefinition = {
   readonly description: string;
@@ -56,15 +66,21 @@ export function toolDefinition(tool: Tool): ToolDefinition {
   return {
     description: tool.description,
     name: tool.name,
-    parameters: tool.schema ?? providerSchema(tool.parameters),
+    parameters: providerParameters(tool),
   };
 }
 
-function providerSchema(parameters: ToolParameters): JsonSchema {
-  if (isStandardSchema(parameters)) {
-    return { type: "object" };
+function providerParameters(tool: Tool): JsonSchema {
+  const parameters = tool.parameters;
+  if (!isStandardSchema(parameters)) {
+    return tool.schema ?? parameters;
   }
-  return parameters;
+  if (tool.schema === undefined) {
+    throw new Error(
+      `Standard-schema tool requires provider schema: ${tool.name}`,
+    );
+  }
+  return tool.schema;
 }
 
 export function isStandardSchema(

@@ -1,4 +1,3 @@
-import { Effect } from "effect";
 import type { CoreEvent } from "./events";
 export type EventSessions = Map<string, EventSession>;
 
@@ -12,62 +11,52 @@ type EventWaiter = {
   readonly resolve: (result: IteratorResult<CoreEvent>) => void;
 };
 
-export function shutdownEventSessions(
-  sessions: EventSessions,
-): Effect.Effect<void> {
-  return Effect.sync(() => {
-    for (const session of sessions.values()) {
-      closeSession(session);
-    }
-    sessions.clear();
-  });
+export function shutdownEventSessions(sessions: EventSessions): void {
+  for (const session of sessions.values()) {
+    closeSession(session);
+  }
+  sessions.clear();
 }
 
 export function eventSessionIterable(
   sessions: EventSessions,
   sessionId: string,
-): Effect.Effect<AsyncIterable<CoreEvent>> {
-  return Effect.sync(() => eventIterable(sessionState(sessions, sessionId)));
+): AsyncIterable<CoreEvent> {
+  return eventIterable(sessionState(sessions, sessionId));
 }
 
 export function registerEventSession(
   sessions: EventSessions,
   sessionId: string,
-): Effect.Effect<void> {
-  return Effect.sync(() => {
-    sessions.set(sessionId, makeEventSession());
-  });
+): void {
+  sessions.set(sessionId, makeEventSession());
 }
 
 export function unregisterEventSession(
   sessions: EventSessions,
   sessionId: string,
-): Effect.Effect<void> {
-  return Effect.sync(() => {
-    const session = sessions.get(sessionId);
-    if (session !== undefined) {
-      closeSession(session);
-      sessions.delete(sessionId);
-    }
-  });
+): void {
+  const session = sessions.get(sessionId);
+  if (session !== undefined) {
+    closeSession(session);
+    sessions.delete(sessionId);
+  }
 }
 
 export function publishEventToSession(
   sessions: EventSessions,
   event: CoreEvent,
-): Effect.Effect<void> {
-  return Effect.sync(() => {
-    const session = sessions.get(event.sessionId);
-    if (session === undefined || session.closed) {
-      return;
-    }
-    session.history.push(event);
-    const waiters = Array.from(session.waiters);
-    session.waiters.clear();
-    for (const waiter of waiters) {
-      waiter.resolve({ done: false, value: event });
-    }
-  });
+): void {
+  const session = sessions.get(event.sessionId);
+  if (session === undefined || session.closed) {
+    return;
+  }
+  session.history.push(event);
+  const waiters = Array.from(session.waiters);
+  session.waiters.clear();
+  for (const waiter of waiters) {
+    waiter.resolve({ done: false, value: event });
+  }
 }
 
 function makeEventSession(): EventSession {

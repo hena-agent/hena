@@ -1,6 +1,6 @@
 import type { CoreEvent, CoreEventType } from "./events";
 import type { Provider } from "./provider";
-import type { Tool } from "./tools";
+import { isStandardSchema, type Tool } from "./tools";
 
 export type EventObserver = {
   readonly handler: (event: CoreEvent) => Promise<void> | void;
@@ -82,9 +82,18 @@ function makeExtensionApi(registrations: MutableRegistrations): ExtensionAPI {
     },
     registerTool: (tool: Tool): void => {
       assertRegistrationOpen(registrations);
+      assertProviderSchema(tool);
       registrations.tools.push(tool);
     },
   };
+}
+
+function assertProviderSchema(tool: Tool): void {
+  if (isStandardSchema(tool.parameters) && tool.schema === undefined) {
+    throw new Error(
+      `Standard-schema tool requires provider schema: ${tool.name}`,
+    );
+  }
 }
 
 function assertRegistrationOpen(registrations: MutableRegistrations): void {

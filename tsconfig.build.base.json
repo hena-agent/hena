@@ -2,11 +2,11 @@
   "$schema": "https://json.schemastore.org/tsconfig",
   "extends": "./tsconfig.package.json",
   "compilerOptions": {
+    "composite": false,
     "emitDeclarationOnly": true,
     "noEmit": false,
     "outDir": "${configDir}/dist",
-    "rootDir": "${configDir}/src",
-    "tsBuildInfoFile": "${configDir}/dist/build.tsbuildinfo"
+    "rootDir": "${configDir}/src"
   },
   "include": ["${configDir}/src/index.ts"]
 }

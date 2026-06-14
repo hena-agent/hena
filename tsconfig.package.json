@@ -3,7 +3,7 @@
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "composite": true,
-    "tsBuildInfoFile": "${configDir}/dist/typecheck.tsbuildinfo"
+    "tsBuildInfoFile": "${configDir}/.tsbuildinfo/typecheck.tsbuildinfo"
   },
   "include": ["${configDir}/src/**/*.ts"],
   "exclude": ["${configDir}/coverage", "${configDir}/dist"]

@@ -30,24 +30,42 @@ export async function collectExtensions(
   let provider: Provider | undefined;
   const tools: Tool[] = [];
   const observers: EventObserver[] = [];
+  let open = true;
   const api = makeExtensionApi({
+    isOpen: () => open,
     observers,
     setProvider: (next: Provider): void => {
       provider = next;
     },
     tools,
   });
-  for (const setup of extensions) {
-    await setup(api);
+  try {
+    for (const setup of extensions) {
+      await setup(api);
+    }
+  } finally {
+    open = false;
   }
-  return { observers, provider, tools };
+  assertUniqueToolNames(tools);
+  return { observers: [...observers], provider, tools: [...tools] };
 }
 
 type MutableRegistrations = {
+  readonly isOpen: () => boolean;
   readonly observers: EventObserver[];
   readonly setProvider: (provider: Provider) => void;
   readonly tools: Tool[];
 };
+
+function assertUniqueToolNames(tools: readonly Tool[]): void {
+  const names = new Set<string>();
+  for (const tool of tools) {
+    if (names.has(tool.name)) {
+      throw new Error(`Duplicate tool name: ${tool.name}`);
+    }
+    names.add(tool.name);
+  }
+}
 
 function makeExtensionApi(registrations: MutableRegistrations): ExtensionAPI {
   return {
@@ -55,11 +73,22 @@ function makeExtensionApi(registrations: MutableRegistrations): ExtensionAPI {
       type: CoreEventType | "event",
       handler: (event: CoreEvent) => Promise<void> | void,
     ): void => {
+      assertRegistrationOpen(registrations);
       registrations.observers.push({ handler, type });
     },
-    provideProvider: registrations.setProvider,
+    provideProvider: (provider: Provider): void => {
+      assertRegistrationOpen(registrations);
+      registrations.setProvider(provider);
+    },
     registerTool: (tool: Tool): void => {
+      assertRegistrationOpen(registrations);
       registrations.tools.push(tool);
     },
   };
+}
+
+function assertRegistrationOpen(registrations: MutableRegistrations): void {
+  if (!registrations.isOpen()) {
+    throw new Error("Extension registration is closed");
+  }
 }

@@ -67,7 +67,7 @@ export function emit(
   });
 }
 
-export function emitWithBus(
+function emitWithBus(
   state: SessionState,
   bus: EventBusService,
   payload: EventPayload,

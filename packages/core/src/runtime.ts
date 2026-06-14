@@ -1,4 +1,5 @@
 import { ManagedRuntime } from "effect";
+import type { ManagedRuntime as ManagedRuntimeType } from "effect/ManagedRuntime";
 import { collectExtensions, type Extension } from "./extension";
 import { type CoreServices, makeCoreLayer } from "./services";
 import { makeSession, type Session } from "./session";
@@ -27,8 +28,13 @@ export async function createRuntime(
   const context = await managed.context();
   const sessions = new Set<Session>();
   let sessionCounter = 1;
+  let disposed = false;
+  let disposal: Promise<void> | undefined;
   return {
     createSession: () => {
+      if (disposed) {
+        throw new Error("Runtime is disposed");
+      }
       const id = `session_${sessionCounter}`;
       sessionCounter += 1;
       let session: Session;
@@ -45,14 +51,27 @@ export async function createRuntime(
       return session;
     },
     dispose: async (): Promise<void> => {
-      await Promise.all(
-        Array.from(sessions, async (session) => {
-          await session.dispose();
-        }),
-      );
-      await managed.dispose();
+      if (disposal !== undefined) {
+        await disposal;
+        return;
+      }
+      disposed = true;
+      disposal = disposeRuntime(sessions, managed);
+      await disposal;
     },
   };
+}
+
+async function disposeRuntime(
+  sessions: Set<Session>,
+  managed: ManagedRuntimeType<CoreServices, never>,
+): Promise<void> {
+  await Promise.all(
+    Array.from(sessions, async (session) => {
+      await session.dispose();
+    }),
+  );
+  await managed.dispose();
 }
 
 function normalizeMaxTurns(value: number | undefined): number {

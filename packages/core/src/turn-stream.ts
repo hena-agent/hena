@@ -98,7 +98,8 @@ function applyChunk(
 ): Effect.Effect<void, never, CoreServices> {
   if (chunk.type === "finish") {
     return Effect.sync(() => {
-      accumulator.error = chunk.error;
+      accumulator.error =
+        chunk.stopReason === "error" ? chunk.error : undefined;
       accumulator.stopReason = chunk.stopReason;
       accumulator.usage = chunk.usage;
     });

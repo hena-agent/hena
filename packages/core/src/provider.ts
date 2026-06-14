@@ -1,4 +1,4 @@
-import type { AgentError, StopReason, TokenUsage, ToolCall } from "./common";
+import type { AgentError, TokenUsage, ToolCall } from "./common";
 import type { ToolDefinition } from "./tools";
 
 export type ModelPart =
@@ -25,8 +25,13 @@ export type ProviderChunk =
   | { readonly text: string; readonly type: "text_delta" }
   | { readonly toolCall: ToolCall; readonly type: "tool_call" }
   | {
-      readonly error?: AgentError;
-      readonly stopReason: StopReason;
+      readonly stopReason: "aborted" | "completed";
+      readonly type: "finish";
+      readonly usage?: TokenUsage;
+    }
+  | {
+      readonly error: AgentError;
+      readonly stopReason: "error";
       readonly type: "finish";
       readonly usage?: TokenUsage;
     };

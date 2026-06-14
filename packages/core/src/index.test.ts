@@ -14,10 +14,12 @@ import {
   corePackageName,
   createRuntime,
   type Extension,
+  type ExtensionAPI,
   errorFromUnknown,
   type HenaRuntime,
   type ProviderChunk,
   type ProviderRequest,
+  type ToolDefinition,
   type TranscriptEntry,
 } from "./index";
 
@@ -153,6 +155,46 @@ test("rejects invalid max turn configuration", async () => {
   ).rejects.toThrow("maxTurns must be a positive integer");
 });
 
+test("rejects duplicate extension tool names", async () => {
+  await expect(
+    createRuntime({
+      extensions: [textProvider("unused"), noopTool(), noopTool()],
+    }),
+  ).rejects.toThrow("Duplicate tool name: noop");
+});
+
+test("closes extension registration after setup", async () => {
+  let captured: ExtensionAPI | undefined;
+  await makeRuntime([
+    textProvider("unused"),
+    (api) => {
+      captured = api;
+    },
+  ]);
+  const extensionApi = captured;
+  if (extensionApi === undefined) {
+    throw new Error("Expected extension API to be captured");
+  }
+
+  expect(() => {
+    extensionApi.registerTool({
+      description: "Late tool.",
+      execute: () => ({ text: "late", type: "text" }),
+      name: "late",
+      parameters: { type: "object" },
+    });
+  }).toThrow("Extension registration is closed");
+});
+
+test("runtime disposal is idempotent and closes session creation", async () => {
+  const runtime = await makeRuntime([textProvider("unused")]);
+
+  await runtime.dispose();
+  await runtime.dispose();
+
+  expect(() => runtime.createSession()).toThrow("Runtime is disposed");
+});
+
 test("rejects a second prompt while a run is active", async () => {
   const runtime = await makeRuntime([abortableProvider()]);
   const session = runtime.createSession();
@@ -233,6 +275,20 @@ test("validates standard-schema tool inputs", async () => {
   });
 });
 
+test("sends provider-facing tool schemas without runtime validators", async () => {
+  const seen: ToolDefinition[][] = [];
+  const runtime = await makeRuntime([capturingProvider(seen), standardTools()]);
+  const session = runtime.createSession();
+
+  await session.prompt("schemas");
+
+  expect(seen[0]?.map((tool) => tool.parameters)).toEqual([
+    { type: "object" },
+    { type: "object" },
+  ]);
+  expect(JSON.stringify(seen)).not.toContain("~standard");
+});
+
 test("turns tool failures into tool results", async () => {
   const runtime = await makeRuntime([failingToolProvider(), failingTool()]);
   const session = runtime.createSession();
@@ -278,6 +334,18 @@ test("normalizes provider stream throws as data", async () => {
 
   expect(session.transcript()[1]).toMatchObject({
     error: { message: "provider blew up" },
+    stopReason: "error",
+  });
+});
+
+test("normalizes provider stream creation throws as data", async () => {
+  const runtime = await makeRuntime([providerStreamCreationThrows()]);
+  const session = runtime.createSession();
+
+  await session.prompt("fail before stream");
+
+  expect(session.transcript()[1]).toMatchObject({
+    error: { message: "stream setup failed" },
     stopReason: "error",
   });
 });
@@ -764,6 +832,30 @@ function providerThrows(error: Error): Extension {
   return (api) => {
     api.provideProvider({
       stream: () => throwingStream(error),
+    });
+  };
+}
+
+function providerStreamCreationThrows(): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: () => {
+        throw new Error("stream setup failed");
+      },
+    });
+  };
+}
+
+function capturingProvider(seen: ToolDefinition[][]): Extension {
+  return (api) => {
+    api.provideProvider({
+      stream: (request: ProviderRequest) => {
+        seen.push([...request.tools]);
+        return chunkStream([
+          { text: "schemas", type: "text_delta" },
+          { stopReason: "completed", type: "finish" },
+        ]);
+      },
     });
   };
 }

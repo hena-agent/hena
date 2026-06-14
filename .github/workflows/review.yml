@@ -12,6 +12,13 @@ permissions:
   pull-requests: write
   issues: write
 
+# A new push to a PR supersedes the previous commit, so cancel the in-flight
+# run (CI gate + the expensive reviewer jobs) for that PR. github.ref is
+# refs/pull/<n>/merge here, so this is scoped per-PR and never cancels another PR.
+concurrency:
+  group: review-${{ github.ref }}
+  cancel-in-progress: true
+
 # Same-repo PRs only (OPENCODE_AUTH_JSON is not exposed to fork PRs).
 # Each reviewer runs via the shared _opencode-review.yml reusable workflow and
 # posts under its own GitHub App identity:

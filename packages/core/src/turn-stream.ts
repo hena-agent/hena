@@ -2,6 +2,11 @@ import { Effect } from "effect";
 import type { AgentError, StopReason, TokenUsage, ToolCall } from "./common";
 import { errorFromUnknown } from "./common";
 import type { ProviderChunk } from "./provider";
+import {
+  finishFromError,
+  finishFromMissingFinish,
+  singleChunkIterator,
+} from "./provider-finish";
 import type { CoreServices } from "./services";
 import { emit, type SessionState } from "./state";
 import type { AssistantPart } from "./transcript";
@@ -14,30 +19,42 @@ export type TurnAccumulator = {
   usage: TokenUsage | undefined;
 };
 
-type ReadResult =
-  | { readonly chunk: ProviderChunk; readonly type: "chunk" }
-  | { readonly type: "done" };
+type ProviderStreamFactory = () => AsyncIterable<ProviderChunk>;
 
 export function consumeProviderStream(
   state: SessionState,
-  stream: AsyncIterable<ProviderChunk>,
+  stream: ProviderStreamFactory,
   signal: AbortSignal,
 ): Effect.Effect<TurnAccumulator, never, CoreServices> {
   return Effect.gen(function* () {
-    const iterator = stream[Symbol.asyncIterator]();
+    const iterator = yield* openIterator(stream, signal);
     const accumulator = emptyAccumulator();
     try {
       let reading = true;
       while (reading) {
-        const read = yield* readNext(iterator, signal);
-        yield* applyRead(state, accumulator, read);
-        reading = read.type === "chunk" && read.chunk.type !== "finish";
+        const chunk = yield* readNext(iterator, signal);
+        yield* applyChunk(state, accumulator, chunk);
+        reading = chunk.type !== "finish";
       }
       return accumulator;
     } finally {
       yield* closeIterator(iterator);
     }
   });
+}
+
+function openIterator(
+  stream: ProviderStreamFactory,
+  signal: AbortSignal,
+): Effect.Effect<AsyncIterator<ProviderChunk>> {
+  return Effect.try({
+    catch: (cause: unknown) => errorFromUnknown(cause, { signal }),
+    try: () => stream()[Symbol.asyncIterator](),
+  }).pipe(
+    Effect.catch((error) =>
+      Effect.succeed(singleChunkIterator(finishFromError(error))),
+    ),
+  );
 }
 
 function closeIterator(
@@ -55,7 +72,7 @@ function closeIterator(
 function readNext(
   iterator: AsyncIterator<ProviderChunk>,
   signal: AbortSignal,
-): Effect.Effect<ReadResult> {
+): Effect.Effect<ProviderChunk> {
   return Effect.tryPromise({
     catch: (cause: unknown) => errorFromUnknown(cause, { signal }),
     try: async (): Promise<IteratorResult<ProviderChunk>> => {
@@ -64,33 +81,11 @@ function readNext(
     },
   }).pipe(
     Effect.map(
-      (result): ReadResult =>
-        result.done === true
-          ? { type: "done" }
-          : { chunk: result.value, type: "chunk" },
+      (result): ProviderChunk =>
+        result.done === true ? finishFromMissingFinish() : result.value,
     ),
-    Effect.catch((error) =>
-      Effect.succeed({ chunk: finishFromError(error), type: "chunk" } as const),
-    ),
+    Effect.catch((error) => Effect.succeed(finishFromError(error))),
   );
-}
-
-function finishFromError(error: AgentError): ProviderChunk {
-  if (error.category === "aborted") {
-    return { stopReason: "aborted", type: "finish" };
-  }
-  return { error, stopReason: "error", type: "finish" };
-}
-
-function applyRead(
-  state: SessionState,
-  accumulator: TurnAccumulator,
-  read: ReadResult,
-): Effect.Effect<void, never, CoreServices> {
-  if (read.type === "done") {
-    return Effect.succeed(undefined);
-  }
-  return applyChunk(state, accumulator, read.chunk);
 }
 
 function applyChunk(

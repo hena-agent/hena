@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import type { ToolCall, ToolOutput } from "./common";
+import type { AgentError, ToolCall, ToolOutput } from "./common";
 import { errorFromUnknown } from "./common";
 import { type CoreServices, EventBus, ToolRegistry } from "./services";
 import {
@@ -14,9 +14,11 @@ import { validateInput } from "./tool-validation";
 import type { Tool } from "./tools";
 import type { ToolResultEntry } from "./transcript";
 
+type ToolDispatchResult = { readonly type: "completed" | "aborted" };
+
 type ToolRun = {
-  readonly isError: boolean;
   readonly output: ToolOutput;
+  readonly type: "success" | "error" | "aborted";
 };
 
 type ExecuteToolOptions = {
@@ -28,14 +30,18 @@ export function dispatchToolCalls(
   state: SessionState,
   calls: readonly ToolCall[],
   signal: AbortSignal,
-): Effect.Effect<readonly ToolResultEntry[], never, CoreServices> {
+): Effect.Effect<ToolDispatchResult, never, CoreServices> {
   return Effect.gen(function* () {
-    const results: ToolResultEntry[] = [];
     for (const call of calls) {
-      const result = yield* dispatchToolCall(state, call, signal);
-      results.push(result);
+      if (signalAborted(signal)) {
+        return { type: "aborted" };
+      }
+      const run = yield* dispatchToolCall(state, call, signal);
+      if (run.type === "aborted" || signalAborted(signal)) {
+        return { type: "aborted" };
+      }
     }
-    return results;
+    return { type: "completed" };
   });
 }
 
@@ -43,7 +49,7 @@ function dispatchToolCall(
   state: SessionState,
   call: ToolCall,
   signal: AbortSignal,
-): Effect.Effect<ToolResultEntry, never, CoreServices> {
+): Effect.Effect<ToolRun, never, CoreServices> {
   return Effect.gen(function* () {
     const registry = yield* ToolRegistry;
     yield* emit(state, { toolCall: call, type: "tool_start" });
@@ -55,7 +61,7 @@ function dispatchToolCall(
     const entry = yield* makeToolResult(state, call, run);
     yield* appendEntry(state, entry);
     yield* emit(state, { entry, type: "tool_end" });
-    return entry;
+    return run;
   });
 }
 
@@ -103,8 +109,8 @@ function executeTool(
         return output;
       },
     }).pipe(
-      Effect.map((output) => ({ isError: false, output }) satisfies ToolRun),
-      Effect.catch((error) => Effect.succeed(errorRun(error.message))),
+      Effect.map((output) => ({ output, type: "success" }) satisfies ToolRun),
+      Effect.catch((error) => Effect.succeed(toolRunFromError(error))),
     );
   });
 }
@@ -117,7 +123,7 @@ function makeToolResult(
   return Effect.map(nextEntryId(state), (id) => ({
     content: run.output,
     id,
-    isError: run.isError,
+    isError: run.type !== "success",
     role: "tool_result",
     timestamp: now(),
     toolCallId: call.id,
@@ -126,5 +132,16 @@ function makeToolResult(
 }
 
 function errorRun(message: string): ToolRun {
-  return { isError: true, output: { text: message, type: "text" } };
+  return { output: { text: message, type: "text" }, type: "error" };
 }
+
+function abortedRun(message: string): ToolRun {
+  return { output: { text: message, type: "text" }, type: "aborted" };
+}
+
+function toolRunFromError(error: AgentError): ToolRun {
+  return error.category === "aborted"
+    ? abortedRun(error.message)
+    : errorRun(error.message);
+}
+const signalAborted = (signal: AbortSignal): boolean => signal.aborted;

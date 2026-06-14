@@ -5,7 +5,6 @@ import type {
   ToolCall,
   ToolOutput,
 } from "./common";
-import { errorFromUnknown } from "./common";
 import type { CoreEvent, CoreEventType, EventPayload } from "./events";
 import type { EventObserver, Extension, ExtensionAPI } from "./extension";
 import type {
@@ -38,6 +37,8 @@ import type {
 
 export const corePackageName = "@hena-dev/core";
 
+// Curated public facade for @hena-dev/core; internal modules should avoid
+// barrel re-exports and import from their source modules directly.
 export type {
   AgentError,
   AssistantEntry,
@@ -69,4 +70,4 @@ export type {
   TranscriptEntry,
   UserEntry,
 };
-export { createRuntime, errorFromUnknown };
+export { createRuntime };

@@ -1,6 +1,8 @@
+import { ManagedRuntime } from "effect";
 import { afterEach, expect, test } from "vitest";
 import { errorFromUnknown } from "./common";
 import { corePackageName } from "./core";
+import { dispatchToolCalls } from "./dispatch";
 import {
   type EventSessions,
   eventSessionIterable,
@@ -11,11 +13,14 @@ import {
 } from "./event-log";
 import type { Extension, ExtensionAPI } from "./extension";
 import { createRuntime } from "./runtime";
+import { makeCoreLayer } from "./services";
+import { makeSessionState } from "./state";
 import {
   abortableProvider,
   abortErrorProvider,
   uncooperativeProvider,
 } from "./test-support/abort-providers";
+import { abortThrowingTool } from "./test-support/abort-tools";
 import {
   capturingProvider,
   multiTextProvider,
@@ -43,6 +48,7 @@ import {
 import { chunkStream } from "./test-support/streams";
 import {
   abortableToolProvider,
+  abortThrowingToolProvider,
   loopingToolProvider,
   toolProvider,
   unknownToolProvider,
@@ -61,7 +67,7 @@ import {
   failingToolProvider,
   validationProvider,
 } from "./test-support/validation-providers";
-import { type ToolDefinition, toolDefinition } from "./tools";
+import type { ToolDefinition } from "./tools";
 
 afterEach(async () => {
   await disposeRuntimes();
@@ -428,19 +434,6 @@ test("rejects standard-schema tools without provider schemas", async () => {
   );
 });
 
-test("rejects invalid standard-schema tool definitions defensively", () => {
-  expect(() => {
-    Reflect.apply(toolDefinition, undefined, [
-      {
-        description: "Invalid standard-schema tool.",
-        execute: () => ({ text: "unused", type: "text" }),
-        name: "invalid-standard",
-        parameters: standardValueSchema,
-      },
-    ]);
-  }).toThrow("Standard-schema tool requires provider schema: invalid-standard");
-});
-
 test("turns tool failures into tool results", async () => {
   const runtime = await makeRuntime([failingToolProvider(), failingTool()]);
   const session = runtime.createSession();
@@ -456,6 +449,48 @@ test("turns tool failures into tool results", async () => {
     parts: [{ text: "saw tool failure", type: "text" }],
     role: "assistant",
   });
+});
+
+test("does not dispatch tools after the run is already aborted", async () => {
+  let executed = false;
+  const runtime = ManagedRuntime.make(
+    makeCoreLayer(
+      {
+        stream: () =>
+          chunkStream([{ stopReason: "completed", type: "finish" }]),
+      },
+      [
+        {
+          description: "Should not execute.",
+          execute: () => {
+            executed = true;
+            return { text: "unexpected", type: "text" };
+          },
+          name: "blocked",
+          parameters: { type: "object" },
+        },
+      ],
+      [],
+    ),
+  );
+  try {
+    const state = runtime.runSync(makeSessionState("session_1"));
+    const controller = new AbortController();
+    controller.abort();
+
+    const result = await runtime.runPromise(
+      dispatchToolCalls(
+        state,
+        [{ id: "call_1", input: {}, name: "blocked" }],
+        controller.signal,
+      ),
+    );
+
+    expect(result).toEqual({ type: "aborted" });
+    expect(executed).toBe(false);
+  } finally {
+    await runtime.dispose();
+  }
 });
 
 test("normalizes provider error finishes as data", async () => {
@@ -560,15 +595,16 @@ test("classifies thrown values", () => {
   });
 });
 
-test("treats a provider stream ending without finish as completed", async () => {
+test("treats a provider stream ending without finish as an error", async () => {
   const runtime = await makeRuntime([providerEndsWithoutFinish()]);
   const session = runtime.createSession();
 
   await session.prompt("no finish");
 
   expect(session.transcript()[1]).toMatchObject({
+    error: { message: "Provider stream ended without a finish chunk" },
     parts: [{ text: "done by iterator", type: "text" }],
-    stopReason: "completed",
+    stopReason: "error",
   });
 });
 
@@ -635,6 +671,33 @@ test("aborts a running tool", async () => {
   expect(session.transcript()[2]).toMatchObject({
     content: { text: "tool aborted", type: "text" },
     isError: false,
+    role: "tool_result",
+  });
+});
+
+test("propagates tool AbortError as an agent abort", async () => {
+  const runtime = await makeRuntime([
+    abortThrowingToolProvider(),
+    abortThrowingTool(),
+  ]);
+  const session = runtime.createSession();
+  const toolStarted = waitForEvent(session.events, "tool_start");
+  const eventsPromise = collectUntilEnd(session.events);
+  const promptPromise = session.prompt("stop throwing tool");
+
+  await toolStarted;
+  session.abort();
+  await promptPromise;
+
+  const events = await eventsPromise;
+  expect(lastEvent(events)).toMatchObject({
+    reason: "aborted",
+    type: "agent_end",
+  });
+  expect(session.transcript()).toHaveLength(3);
+  expect(session.transcript()[2]).toMatchObject({
+    content: { text: "tool aborted", type: "text" },
+    isError: true,
     role: "tool_result",
   });
 });

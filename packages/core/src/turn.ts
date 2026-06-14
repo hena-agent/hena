@@ -1,6 +1,4 @@
 import { Effect } from "effect";
-import { type AgentError, errorFromUnknown } from "./common";
-import type { Provider, ProviderChunk, ProviderRequest } from "./provider";
 import { type CoreServices, ProviderPort, ToolRegistry } from "./services";
 import {
   appendEntry,
@@ -28,33 +26,16 @@ export function runTurn(
       tools: registry.list().map(toolDefinition),
     };
     yield* emit(state, { type: "message_start" });
-    const stream = yield* providerStream(provider, request);
-    const accumulator = yield* consumeProviderStream(state, stream, signal);
+    const accumulator = yield* consumeProviderStream(
+      state,
+      () => provider.stream(request),
+      signal,
+    );
     const entry = yield* assistantEntry(state, accumulator);
     yield* appendEntry(state, entry);
     yield* emit(state, { entry, type: "message_end" });
     return entry;
   });
-}
-
-function providerStream(
-  provider: Provider,
-  request: ProviderRequest,
-): Effect.Effect<AsyncIterable<ProviderChunk>> {
-  return Effect.try({
-    catch: (cause: unknown) =>
-      errorFromUnknown(cause, { signal: request.signal }),
-    try: () => provider.stream(request),
-  }).pipe(Effect.catch((error) => Effect.succeed(errorStream(error))));
-}
-
-async function* errorStream(error: AgentError): AsyncIterable<ProviderChunk> {
-  await Promise.resolve();
-  if (error.category === "aborted") {
-    yield { stopReason: "aborted", type: "finish" };
-  } else {
-    yield { error, stopReason: "error", type: "finish" };
-  }
 }
 
 function assistantEntry(

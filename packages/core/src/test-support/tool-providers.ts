@@ -77,6 +77,27 @@ export function abortableToolProvider(): Extension {
   };
 }
 
+export function abortThrowingToolProvider(): Extension {
+  let calls = 0;
+  return (api: ExtensionAPI): void => {
+    api.provideProvider({
+      stream: () => {
+        calls += 1;
+        if (calls === 1) {
+          return chunkStream([
+            {
+              toolCall: { id: "call_1", input: {}, name: "throw-on-abort" },
+              type: "tool_call",
+            },
+            { stopReason: "completed", type: "finish" },
+          ]);
+        }
+        return chunkStream([{ stopReason: "completed", type: "finish" }]);
+      },
+    });
+  };
+}
+
 export function loopingToolProvider(): Extension {
   let calls = 0;
   return (api: ExtensionAPI): void => {

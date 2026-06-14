@@ -71,16 +71,17 @@ export function toolDefinition(tool: Tool): ToolDefinition {
 }
 
 function providerParameters(tool: Tool): JsonSchema {
-  const parameters = tool.parameters;
-  if (!isStandardSchema(parameters)) {
-    return tool.schema ?? parameters;
+  if (isStandardSchemaTool(tool)) {
+    return tool.schema;
   }
-  if (tool.schema === undefined) {
-    throw new Error(
-      `Standard-schema tool requires provider schema: ${tool.name}`,
-    );
-  }
-  return tool.schema;
+  return tool.schema ?? tool.parameters;
+}
+
+function isStandardSchemaTool(tool: Tool): tool is Tool & {
+  readonly parameters: StandardSchema;
+  readonly schema: JsonSchema;
+} {
+  return isStandardSchema(tool.parameters);
 }
 
 export function isStandardSchema(

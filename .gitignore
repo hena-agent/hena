@@ -35,3 +35,6 @@ pnpm-debug.log*
 .hena/state/
 .entire/tmp/
 .entire/logs/
+
+# Skill reference checkouts (e.g. effect skill clones effect-smol here)
+.agents/references/

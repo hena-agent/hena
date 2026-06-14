@@ -1,7 +1,15 @@
-import { expect, test } from "vitest";
+import { it } from "@effect/vitest";
+import { Effect } from "effect";
+import { expect } from "vitest";
 
-import { corePackageName } from "./index";
+import { corePackageName, corePackageNameEffect } from "./index";
 
-test("exposes the core package name", () => {
+it("exposes the core package name", () => {
   expect(corePackageName).toBe("@hena-dev/core");
 });
+
+it.effect("yields the core package name as an Effect", () =>
+  Effect.gen(function* () {
+    expect(yield* corePackageNameEffect).toBe("@hena-dev/core");
+  }),
+);

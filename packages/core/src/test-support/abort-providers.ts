@@ -1,8 +1,8 @@
-import type { Extension, ExtensionAPI } from "../extension";
-import type { ProviderChunk, ProviderRequest } from "../provider";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
+import type { ProviderChunk, ProviderRequest } from "../provider/provider";
 import { waitForAbort } from "./streams";
 
-export function abortableProvider(): Extension {
+export const abortableProvider = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: async function* (
@@ -14,9 +14,9 @@ export function abortableProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function abortErrorProvider(): Extension {
+export const abortErrorProvider = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: async function* (
@@ -30,9 +30,9 @@ export function abortErrorProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function uncooperativeProvider(): Extension {
+export const uncooperativeProvider = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: async function* (): AsyncGenerator<ProviderChunk> {
@@ -41,4 +41,4 @@ export function uncooperativeProvider(): Extension {
       },
     });
   };
-}
+};

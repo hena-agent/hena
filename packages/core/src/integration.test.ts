@@ -1,8 +1,8 @@
 import { afterEach, expect, test } from "vitest";
-
-import type { Extension } from "./extension";
-import type { ProviderChunk, ProviderRequest } from "./provider";
-import { createRuntime, type HenaRuntime } from "./runtime";
+import type { Extension } from "./extensions/extension";
+import type { ProviderChunk, ProviderRequest } from "./provider/provider";
+import { createRuntime } from "./runtime/create-runtime";
+import type { HenaRuntime } from "./runtime/runtime";
 
 const runtimes: Array<HenaRuntime> = [];
 
@@ -40,24 +40,24 @@ test("integrates provider, tool registry, observers, and session state", async (
   expect(observed.filter((type) => type === "agent_end")).toHaveLength(2);
 });
 
-async function makeRuntime(
+const makeRuntime = async (
   extensions: readonly Extension[],
-): Promise<HenaRuntime> {
+): Promise<HenaRuntime> => {
   const runtime = await createRuntime({ extensions });
   runtimes.push(runtime);
   return runtime;
-}
+};
 
-function providerScript(): Extension {
+const providerScript = (): Extension => {
   return (api) => {
     api.provideProvider({
       stream: (request: ProviderRequest) =>
         chunkStream(providerChunks(request)),
     });
   };
-}
+};
 
-function providerChunks(request: ProviderRequest): readonly ProviderChunk[] {
+const providerChunks = (request: ProviderRequest): readonly ProviderChunk[] => {
   if (shouldCallTool(request)) {
     return [
       {
@@ -78,18 +78,18 @@ function providerChunks(request: ProviderRequest): readonly ProviderChunk[] {
     },
     { stopReason: "completed", type: "finish" },
   ];
-}
+};
 
-function shouldCallTool(request: ProviderRequest): boolean {
+const shouldCallTool = (request: ProviderRequest): boolean => {
   const first = request.messages[0];
   return (
     request.messages.length === 1 &&
     first?.role === "user" &&
     first.content === "increment"
   );
-}
+};
 
-function incrementTool(): Extension {
+const incrementTool = (): Extension => {
   return (api) => {
     api.registerTool({
       description: "Adds one to a number.",
@@ -101,39 +101,39 @@ function incrementTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-function eventRecorder(observed: Array<string>): Extension {
+const eventRecorder = (observed: Array<string>): Extension => {
   return (api) => {
     api.on("event", (event) => {
       observed.push(event.type);
     });
   };
-}
+};
 
-function chunkStream(
+const chunkStream = (
   chunks: readonly ProviderChunk[],
-): AsyncIterable<ProviderChunk> {
-  return makeChunkStream(chunks);
-}
+): AsyncIterable<ProviderChunk> => makeChunkStream(chunks);
 
 async function* makeChunkStream(chunks: readonly ProviderChunk[]) {
   await Promise.resolve();
   yield* chunks;
 }
 
-function readValue(input: unknown): number {
+const readValue = (input: unknown): number => {
   if (hasNumericValue(input)) {
     return input.value;
   }
   return 0;
-}
+};
 
-function hasNumericValue(input: unknown): input is { readonly value: number } {
+const hasNumericValue = (
+  input: unknown,
+): input is { readonly value: number } => {
   return (
     typeof input === "object" &&
     input !== null &&
     "value" in input &&
     typeof input.value === "number"
   );
-}
+};

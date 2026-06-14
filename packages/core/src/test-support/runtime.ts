@@ -1,29 +1,30 @@
-import type { CoreEvent } from "../events";
-import type { Extension } from "../extension";
-import { createRuntime, type HenaRuntime } from "../runtime";
-import type { AssistantPart, TranscriptEntry } from "../transcript";
+import type { CoreEvent } from "../events/events";
+import type { Extension } from "../extensions/extension";
+import { createRuntime } from "../runtime/create-runtime";
+import type { HenaRuntime } from "../runtime/runtime";
+import type { AssistantPart, TranscriptEntry } from "../transcript/transcript";
 
 const runtimes: Array<HenaRuntime> = [];
 
-export async function disposeRuntimes(): Promise<void> {
+export const disposeRuntimes = async (): Promise<void> => {
   const disposals = runtimes.splice(0).map(async (runtime) => {
     await runtime.dispose();
   });
   await Promise.all(disposals);
-}
+};
 
-export async function makeRuntime(
+export const makeRuntime = async (
   extensions: ReadonlyArray<Extension>,
   options: { readonly maxTurns?: number } = {},
-): Promise<HenaRuntime> {
+): Promise<HenaRuntime> => {
   const runtime = await createRuntime({ ...options, extensions });
   runtimes.push(runtime);
   return runtime;
-}
+};
 
-export async function collectUntilEnd(
+export const collectUntilEnd = async (
   events: AsyncIterable<CoreEvent>,
-): Promise<Array<CoreEvent>> {
+): Promise<Array<CoreEvent>> => {
   const collected: Array<CoreEvent> = [];
   for await (const event of events) {
     collected.push(event);
@@ -32,63 +33,60 @@ export async function collectUntilEnd(
     }
   }
   return collected;
-}
+};
 
-export async function waitForEvent(
+export const waitForEvent = async (
   events: AsyncIterable<CoreEvent>,
   type: CoreEvent["type"],
-): Promise<CoreEvent> {
+): Promise<CoreEvent> => {
   for await (const event of events) {
     if (event.type === type) {
       return event;
     }
   }
   throw new Error(`Event ${type} was not emitted`);
-}
+};
 
-export function eventTypes(
+export const eventTypes = (
   events: ReadonlyArray<CoreEvent>,
-): Array<CoreEvent["type"]> {
-  return events.map((event) => event.type);
-}
+): Array<CoreEvent["type"]> => events.map((event) => event.type);
 
-export function messageDeltas(events: ReadonlyArray<CoreEvent>): Array<string> {
-  return events.flatMap((event) =>
+export const messageDeltas = (
+  events: ReadonlyArray<CoreEvent>,
+): Array<string> =>
+  events.flatMap((event) =>
     event.type === "message_delta" ? [event.text] : [],
   );
-}
 
-export function lastEvent(events: ReadonlyArray<CoreEvent>): CoreEvent {
+export const lastEvent = (events: ReadonlyArray<CoreEvent>): CoreEvent => {
   const last = events.at(-1);
   if (last === undefined) {
     throw new Error("Expected at least one event");
   }
   return last;
-}
+};
 
-export function assistantParts(
+export const assistantParts = (
   entry: TranscriptEntry | undefined,
-): readonly AssistantPart[] {
+): readonly AssistantPart[] => {
   if (entry?.role !== "assistant") {
     throw new Error("Expected an assistant transcript entry");
   }
   return entry.parts;
-}
+};
 
-export function mockEvent(sessionId: string): CoreEvent {
-  return {
-    schemaVersion: 1,
-    sequence: 1,
-    sessionId,
-    timestamp: "2026-01-01T00:00:00.000Z",
-    type: "agent_start",
-  };
-}
+export const mockEvent = (sessionId: string): CoreEvent => ({
+  schemaVersion: 1,
+  sequence: 1,
+  sessionId,
+  timestamp: "2026-01-01T00:00:00.000Z",
+  type: "agent_start",
+});
 
-export async function withTimeout<T>(
+export const withTimeout = async <T>(
   promise: Promise<T>,
   ms: number,
-): Promise<T> {
+): Promise<T> => {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   try {
     return await Promise.race([
@@ -104,4 +102,4 @@ export async function withTimeout<T>(
       clearTimeout(timeout);
     }
   }
-}
+};

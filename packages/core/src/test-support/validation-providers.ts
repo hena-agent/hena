@@ -1,7 +1,7 @@
-import type { Extension, ExtensionAPI } from "../extension";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
 import { chunkStream } from "./streams";
 
-export function validationProvider(): Extension {
+export const validationProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -39,9 +39,9 @@ export function validationProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function failingToolProvider(): Extension {
+export const failingToolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -63,4 +63,4 @@ export function failingToolProvider(): Extension {
       },
     });
   };
-}
+};

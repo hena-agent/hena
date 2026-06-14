@@ -1,9 +1,9 @@
-import type { ToolOutput } from "../common";
-import type { Extension, ExtensionAPI } from "../extension";
-import type { StandardResult, ToolContext } from "../tools";
+import type { ToolOutput } from "../common/common";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
+import type { StandardResult, ToolContext } from "../tools/tools";
 import { waitForAbort } from "./streams";
 
-export function noopTool(): Extension {
+export const noopTool = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Returns a no-op result.",
@@ -12,9 +12,9 @@ export function noopTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-export function doubleTool(): Extension {
+export const doubleTool = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Doubles a numeric value.",
@@ -29,9 +29,9 @@ export function doubleTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-export function abortableTool(): Extension {
+export const abortableTool = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Waits until the session is aborted.",
@@ -46,9 +46,9 @@ export function abortableTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-export function standardTools(): Extension {
+export const standardTools = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Triples a numeric value.",
@@ -68,7 +68,7 @@ export function standardTools(): Extension {
       schema: emptyToolSchema,
     });
   };
-}
+};
 
 export const valueToolSchema = {
   properties: { value: { type: "number" } },
@@ -100,7 +100,7 @@ const throwingStandardSchema = {
   },
 };
 
-export function failingTool(): Extension {
+export const failingTool = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Throws for test coverage.",
@@ -111,29 +111,33 @@ export function failingTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-function readValue(input: unknown): number {
+const readValue = (input: unknown): number => {
   if (hasNumericValue(input)) {
     return input.value;
   }
   return 0;
-}
+};
 
-function hasNumericValue(input: unknown): input is { readonly value: number } {
+const hasNumericValue = (
+  input: unknown,
+): input is { readonly value: number } => {
   return (
     typeof input === "object" &&
     input !== null &&
     "value" in input &&
     typeof input.value === "number"
   );
-}
+};
 
-function hasFallbackFlag(input: unknown): input is { readonly fallback: true } {
+const hasFallbackFlag = (
+  input: unknown,
+): input is { readonly fallback: true } => {
   return (
     typeof input === "object" &&
     input !== null &&
     "fallback" in input &&
     input.fallback === true
   );
-}
+};

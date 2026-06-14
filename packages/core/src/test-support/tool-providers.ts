@@ -1,8 +1,8 @@
-import type { Extension, ExtensionAPI } from "../extension";
-import type { ProviderRequest } from "../provider";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
+import type { ProviderRequest } from "../provider/provider";
 import { chunkStream } from "./streams";
 
-export function toolProvider(): Extension {
+export const toolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -25,9 +25,9 @@ export function toolProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function unknownToolProvider(): Extension {
+export const unknownToolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -49,9 +49,9 @@ export function unknownToolProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function abortableToolProvider(): Extension {
+export const abortableToolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -75,9 +75,9 @@ export function abortableToolProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function abortThrowingToolProvider(): Extension {
+export const abortThrowingToolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -96,9 +96,9 @@ export function abortThrowingToolProvider(): Extension {
       },
     });
   };
-}
+};
 
-export function loopingToolProvider(): Extension {
+export const loopingToolProvider = (): Extension => {
   let calls = 0;
   return (api: ExtensionAPI): void => {
     api.provideProvider({
@@ -114,4 +114,4 @@ export function loopingToolProvider(): Extension {
       },
     });
   };
-}
+};

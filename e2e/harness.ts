@@ -19,9 +19,9 @@ type PromptBody = {
 
 const encoder = new TextEncoder();
 
-export async function createE2EHarness(
+export const createE2EHarness = async (
   extensions: readonly Extension[],
-): Promise<E2EHarness> {
+): Promise<E2EHarness> => {
   const runtime = await createRuntime({ extensions });
   const sessions: Sessions = new Map();
   const server = Bun.serve({
@@ -39,13 +39,13 @@ export async function createE2EHarness(
     },
     url: `http://127.0.0.1:${server.port}`,
   };
-}
+};
 
-function routeRequest(
+const routeRequest = (
   request: Request,
   runtime: HenaRuntime,
   sessions: Sessions,
-): Promise<Response> | Response {
+): Promise<Response> | Response => {
   const url = new URL(request.url);
   const parts = url.pathname.split("/").filter(Boolean);
   if (
@@ -64,23 +64,23 @@ function routeRequest(
     );
   }
   return json({ error: "not_found" }, 404);
-}
+};
 
-function createSessionResponse(
+const createSessionResponse = (
   runtime: HenaRuntime,
   sessions: Sessions,
-): Response {
+): Response => {
   const session = runtime.createSession();
   sessions.set(session.id, session);
   return json({ id: session.id }, 201);
-}
+};
 
-function sessionAction(
+const sessionAction = (
   request: Request,
   sessions: Sessions,
   id: string,
   action: string,
-): Promise<Response> | Response {
+): Promise<Response> | Response => {
   const session = sessions.get(id);
   if (session === undefined) {
     return json({ error: "session_not_found" }, 404);
@@ -92,21 +92,21 @@ function sessionAction(
     return promptResponse(request, session);
   }
   return json({ error: "not_found" }, 404);
-}
+};
 
-async function promptResponse(
+const promptResponse = async (
   request: Request,
   session: Session,
-): Promise<Response> {
+): Promise<Response> => {
   const body: unknown = await request.json();
   if (!isPromptBody(body)) {
     return json({ error: "invalid_prompt" }, 400);
   }
   await session.prompt(body.input);
   return json({ ok: true }, 200);
-}
+};
 
-function eventResponse(session: Session): Response {
+const eventResponse = (session: Session): Response => {
   const stream = new ReadableStream<Uint8Array>({
     start: (controller: ReadableStreamDefaultController<Uint8Array>): void => {
       void writeEvents(session.events, controller);
@@ -116,12 +116,12 @@ function eventResponse(session: Session): Response {
     headers: { "content-type": "text/event-stream" },
     status: 200,
   });
-}
+};
 
-async function writeEvents(
+const writeEvents = async (
   events: AsyncIterable<CoreEvent>,
   controller: ReadableStreamDefaultController<Uint8Array>,
-): Promise<void> {
+): Promise<void> => {
   for await (const event of events) {
     controller.enqueue(encoder.encode(`data: ${JSON.stringify(event)}\n\n`));
     if (event.type === "agent_end") {
@@ -129,16 +129,13 @@ async function writeEvents(
       return;
     }
   }
-}
+};
 
-function json(body: object, status: number): Response {
-  return Response.json(body, { status });
-}
+const json = (body: object, status: number): Response =>
+  Response.json(body, { status });
 
-function isPromptBody(value: unknown): value is PromptBody {
-  return isRecord(value) && typeof value.input === "string";
-}
+const isPromptBody = (value: unknown): value is PromptBody =>
+  isRecord(value) && typeof value.input === "string";
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;

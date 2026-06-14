@@ -4,36 +4,37 @@ import type {
   TokenUsage,
   ToolCall,
   ToolOutput,
-} from "./common";
-import type { CoreEvent, CoreEventType, EventPayload } from "./events";
-import type { EventObserver, Extension, ExtensionAPI } from "./extension";
+} from "./common/common";
+import type { CoreEvent, CoreEventType, EventPayload } from "./events/events";
+import type {
+  EventObserver,
+  Extension,
+  ExtensionAPI,
+} from "./extensions/extension";
 import type {
   ModelMessage,
   ModelPart,
   Provider,
   ProviderChunk,
   ProviderRequest,
-} from "./provider";
-import {
-  type CreateRuntimeOptions,
-  createRuntime,
-  type HenaRuntime,
-} from "./runtime";
-import type { Session } from "./session";
+} from "./provider/provider";
+import { createRuntime } from "./runtime/create-runtime";
+import type { CreateRuntimeOptions, HenaRuntime } from "./runtime/runtime";
+import type { Session } from "./session/session";
 import type {
   JsonSchema,
   Tool,
   ToolContext,
   ToolDefinition,
   ToolParameters,
-} from "./tools";
+} from "./tools/tools";
 import type {
   AssistantEntry,
   AssistantPart,
   ToolResultEntry,
   TranscriptEntry,
   UserEntry,
-} from "./transcript";
+} from "./transcript/transcript";
 
 export const corePackageName = "@hena-dev/core";
 

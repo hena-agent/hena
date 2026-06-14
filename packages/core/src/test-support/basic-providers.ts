@@ -1,9 +1,9 @@
-import type { Extension, ExtensionAPI } from "../extension";
-import type { ProviderChunk, ProviderRequest } from "../provider";
-import type { ToolDefinition } from "../tools";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
+import type { ProviderChunk, ProviderRequest } from "../provider/provider";
+import type { ToolDefinition } from "../tools/tools";
 import { chunkStream, throwingStream } from "./streams";
 
-export function textProvider(text: string): Extension {
+export const textProvider = (text: string): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () =>
@@ -13,9 +13,9 @@ export function textProvider(text: string): Extension {
         ]),
     });
   };
-}
+};
 
-export function multiTextProvider(chunks: readonly string[]): Extension {
+export const multiTextProvider = (chunks: readonly string[]): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () =>
@@ -25,9 +25,9 @@ export function multiTextProvider(chunks: readonly string[]): Extension {
         ]),
     });
   };
-}
+};
 
-export function providerWithFinally(onClose: () => void): Extension {
+export const providerWithFinally = (onClose: () => void): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: async function* (): AsyncGenerator<ProviderChunk> {
@@ -41,9 +41,9 @@ export function providerWithFinally(onClose: () => void): Extension {
       },
     });
   };
-}
+};
 
-export function providerWithFailingCleanup(): Extension {
+export const providerWithFailingCleanup = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: async function* (): AsyncGenerator<ProviderChunk> {
@@ -56,13 +56,13 @@ export function providerWithFailingCleanup(): Extension {
       },
     });
   };
-}
+};
 
-async function failingCleanup(): Promise<void> {
+const failingCleanup = async (): Promise<void> => {
   await Promise.reject(new Error("cleanup failed"));
-}
+};
 
-export function providerError(): Extension {
+export const providerError = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () =>
@@ -75,17 +75,17 @@ export function providerError(): Extension {
         ]),
     });
   };
-}
+};
 
-export function providerThrows(error: Error): Extension {
+export const providerThrows = (error: Error): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () => throwingStream(error),
     });
   };
-}
+};
 
-export function providerStreamCreationThrows(): Extension {
+export const providerStreamCreationThrows = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () => {
@@ -93,18 +93,18 @@ export function providerStreamCreationThrows(): Extension {
       },
     });
   };
-}
+};
 
-export function providerEndsWithoutFinish(): Extension {
+export const providerEndsWithoutFinish = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: () =>
         chunkStream([{ text: "done by iterator", type: "text_delta" }]),
     });
   };
-}
+};
 
-export function capturingProvider(seen: ToolDefinition[][]): Extension {
+export const capturingProvider = (seen: ToolDefinition[][]): Extension => {
   return (api: ExtensionAPI): void => {
     api.provideProvider({
       stream: (request: ProviderRequest) => {
@@ -116,4 +116,4 @@ export function capturingProvider(seen: ToolDefinition[][]): Extension {
       },
     });
   };
-}
+};

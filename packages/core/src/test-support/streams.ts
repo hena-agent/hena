@@ -1,10 +1,8 @@
-import type { ProviderChunk } from "../provider";
+import type { ProviderChunk } from "../provider/provider";
 
-export function chunkStream(
+export const chunkStream = (
   chunks: readonly ProviderChunk[],
-): AsyncIterable<ProviderChunk> {
-  return makeChunkStream(chunks);
-}
+): AsyncIterable<ProviderChunk> => makeChunkStream(chunks);
 
 async function* makeChunkStream(
   chunks: readonly ProviderChunk[],
@@ -23,7 +21,7 @@ export async function* throwingStream(
   yield { stopReason: "completed", type: "finish" } satisfies ProviderChunk;
 }
 
-export async function waitForAbort(signal: AbortSignal): Promise<void> {
+export const waitForAbort = async (signal: AbortSignal): Promise<void> => {
   if (signal.aborted) {
     return;
   }
@@ -36,4 +34,4 @@ export async function waitForAbort(signal: AbortSignal): Promise<void> {
       { once: true },
     );
   });
-}
+};

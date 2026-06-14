@@ -1,9 +1,9 @@
-import type { ToolOutput } from "../common";
-import type { Extension, ExtensionAPI } from "../extension";
-import type { ToolContext } from "../tools";
+import type { ToolOutput } from "../common/common";
+import type { Extension, ExtensionAPI } from "../extensions/extension";
+import type { ToolContext } from "../tools/tools";
 import { waitForAbort } from "./streams";
 
-export function abortThrowingTool(): Extension {
+export const abortThrowingTool = (): Extension => {
   return (api: ExtensionAPI): void => {
     api.registerTool({
       description: "Throws an AbortError after the session is aborted.",
@@ -20,4 +20,4 @@ export function abortThrowingTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};

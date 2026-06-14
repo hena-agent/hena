@@ -72,17 +72,17 @@ test("returns typed HTTP errors for invalid E2E requests", async () => {
   expect(unsupportedAction.status).toBe(404);
 });
 
-async function makeHarness(
+const makeHarness = async (
   extensions: readonly Extension[],
-): Promise<E2EHarness> {
+): Promise<E2EHarness> => {
   const harness = await createE2EHarness(extensions);
   harnesses.push(harness);
   return harness;
-}
+};
 
-async function createSession(
+const createSession = async (
   baseUrl: string,
-): Promise<{ readonly id: string }> {
+): Promise<{ readonly id: string }> => {
   const response = await fetch(`${baseUrl}/sessions`, { method: "POST" });
   expect(response.status).toBe(201);
   const body: unknown = await response.json();
@@ -90,9 +90,9 @@ async function createSession(
     throw new Error("Invalid session response");
   }
   return body;
-}
+};
 
-async function collectEvents(url: string): Promise<Array<CoreEvent>> {
+const collectEvents = async (url: string): Promise<Array<CoreEvent>> => {
   const response = await fetch(url);
   expect(response.status).toBe(200);
   if (response.body === null) {
@@ -100,11 +100,11 @@ async function collectEvents(url: string): Promise<Array<CoreEvent>> {
   }
   const events = await readSse(response.body);
   return events;
-}
+};
 
-async function readSse(
+const readSse = async (
   body: ReadableStream<Uint8Array>,
-): Promise<Array<CoreEvent>> {
+): Promise<Array<CoreEvent>> => {
   const reader = body.getReader();
   const decoder = new TextDecoder();
   const events: Array<CoreEvent> = [];
@@ -124,9 +124,9 @@ async function readSse(
     }
   }
   return events;
-}
+};
 
-function parseFrames(buffer: string, events: Array<CoreEvent>): string {
+const parseFrames = (buffer: string, events: Array<CoreEvent>): string => {
   let remaining = buffer;
   let boundary = remaining.indexOf("\n\n");
   while (boundary >= 0) {
@@ -136,9 +136,9 @@ function parseFrames(buffer: string, events: Array<CoreEvent>): string {
     boundary = remaining.indexOf("\n\n");
   }
   return remaining;
-}
+};
 
-function parseFrame(frame: string): CoreEvent {
+const parseFrame = (frame: string): CoreEvent => {
   const line = frame.split("\n").find((part) => part.startsWith("data: "));
   if (line === undefined) {
     throw new Error("Invalid SSE frame");
@@ -148,18 +148,18 @@ function parseFrame(frame: string): CoreEvent {
     throw new Error("Invalid core event");
   }
   return decoded;
-}
+};
 
-function scriptedProvider(): Extension {
+const scriptedProvider = (): Extension => {
   return (api) => {
     api.provideProvider({
       stream: (request: ProviderRequest) =>
         chunkStream(scriptedChunks(request.messages.length)),
     });
   };
-}
+};
 
-function scriptedChunks(messageCount: number): readonly ProviderChunk[] {
+const scriptedChunks = (messageCount: number): readonly ProviderChunk[] => {
   if (messageCount === 1) {
     return [
       {
@@ -173,9 +173,9 @@ function scriptedChunks(messageCount: number): readonly ProviderChunk[] {
     { text: "double result observed", type: "text_delta" },
     { stopReason: "completed", type: "finish" },
   ];
-}
+};
 
-function doubleTool(): Extension {
+const doubleTool = (): Extension => {
   return (api) => {
     api.registerTool({
       description: "Doubles a number.",
@@ -187,38 +187,34 @@ function doubleTool(): Extension {
       parameters: { type: "object" },
     });
   };
-}
+};
 
-function chunkStream(
+const chunkStream = (
   chunks: readonly ProviderChunk[],
-): AsyncIterable<ProviderChunk> {
-  return makeChunkStream(chunks);
-}
+): AsyncIterable<ProviderChunk> => makeChunkStream(chunks);
 
 async function* makeChunkStream(chunks: readonly ProviderChunk[]) {
   await Promise.resolve();
   yield* chunks;
 }
 
-function readValue(input: unknown): number {
+const readValue = (input: unknown): number => {
   if (isRecord(input) && typeof input.value === "number") {
     return input.value;
   }
   return 0;
-}
+};
 
-function isSessionBody(value: unknown): value is { readonly id: string } {
-  return isRecord(value) && typeof value.id === "string";
-}
+const isSessionBody = (value: unknown): value is { readonly id: string } =>
+  isRecord(value) && typeof value.id === "string";
 
-function isCoreEvent(value: unknown): value is CoreEvent {
+const isCoreEvent = (value: unknown): value is CoreEvent => {
   return (
     isRecord(value) &&
     typeof value.type === "string" &&
     typeof value.sessionId === "string"
   );
-}
+};
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;

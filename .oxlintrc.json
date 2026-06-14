@@ -1,6 +1,5 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "jsPlugins": ["./lint/oxlint-plugins/local.js"],
   "plugins": ["typescript"],
   "options": {
     "typeAware": true
@@ -15,24 +14,6 @@
     "**/node_modules/**",
     "**/.turbo/**"
   ],
-  "overrides": [
-    {
-      "files": [
-        "**/*.test.ts",
-        "**/*.test.tsx",
-        "**/*.spec.ts",
-        "**/*.spec.tsx",
-        "e2e/**",
-        "**/test-support/**",
-        "**/index.ts",
-        "**/*.config.ts",
-        "*.config.ts"
-      ],
-      "rules": {
-        "local/at-most-one-root-function": "off"
-      }
-    }
-  ],
   "categories": {
     "correctness": "off",
     "nursery": "off",
@@ -43,8 +24,6 @@
     "suspicious": "off"
   },
   "rules": {
-    "local/at-most-one-root-function": "error",
-    "local/no-function-keyword": "error",
     "typescript/await-thenable": "error",
     "typescript/no-base-to-string": "error",
     "typescript/no-confusing-void-expression": "error",

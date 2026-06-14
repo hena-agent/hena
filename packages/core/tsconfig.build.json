@@ -1,5 +1,3 @@
 {
-  "extends": "../../tsconfig.build.base.json",
-  "include": ["src/**/*.ts"],
-  "exclude": ["coverage", "dist", "src/**/*.test.ts", "src/test-support/**"]
+  "extends": "../../tsconfig.build.base.json"
 }

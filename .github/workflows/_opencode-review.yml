@@ -19,7 +19,7 @@ on:
         required: true
         type: string
       prompt:
-        description: Full review prompt (single source of truth for this reviewer)
+        description: Reviewer-specific prompt. Shared read/posting/language conventions are appended below before the run, so callers only specify what differs between reviewers.
         required: true
         type: string
     secrets:
@@ -58,4 +58,14 @@ jobs:
           variant: ${{ inputs.variant }}
           opencode-auth-json: ${{ secrets.opencode-auth-json }}
           github-token: ${{ steps.app-token.outputs.token }}
-          prompt: ${{ inputs.prompt }}
+          # The reviewer-specific prompt comes from the caller (review.yml). The
+          # read/posting mechanism and output language are identical for every
+          # reviewer, so they live here once instead of being copy-pasted into each
+          # caller job.
+          prompt: |
+            ${{ inputs.prompt }}
+
+            Before writing new findings, read existing PR comments so you do not repeat another reviewer: read top-level comments with `gh pr view ${{ github.event.pull_request.number }} --comments` and line-level review comments with `gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments`.
+            Leave detailed findings as line-level comments on the PR diff. `gh pr comment` and `gh pr review` cannot attach comments to specific diff lines; use this call shape instead: `gh api --method POST repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/comments -f commit_id='${{ github.event.pull_request.head.sha }}' -f path='PATH' -F line=LINE -f side=RIGHT -f body='BODY'`.
+            The final response is posted automatically as one top-level PR comment. Include a concise summary of the core findings and verdict there, including any finding that could not be posted as a line-level comment, but avoid unnecessarily duplicating full line-comment bodies when inline posting succeeds.
+            Write every comment - both the line-level comments and the final response - in Korean.

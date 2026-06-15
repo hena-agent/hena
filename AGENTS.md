@@ -95,10 +95,7 @@ Read `.patterns/effect.md` before changing Effect code. In particular:
 
 ## Testing
 
-Read `.patterns/testing.md` before writing or changing tests.
+The `effect` skill (`.agents/skills/effect/SKILL.md`) is the authoritative source for Effect and test patterns; consult it before writing or changing tests. Repo specifics:
 
-- Test files are located in `packages/*/test/`.
-- Use `it.effect` for Effect-returning tests.
-- Use regular `it` for pure synchronous tests.
-- Do not use `Effect.runSync` in tests.
-- Do not use `expect` from Vitest; use `assert` from `@effect/vitest`.
+- Test files are co-located in `packages/*/src/` as `*.test.ts`.
+- Run a package's tests from its directory with `bun --bun vitest run`.

@@ -10,14 +10,14 @@
   ],
   "scripts": {
     "build": "turbo run build",
-    "check": "biome check . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware && bun run typecheck && bun run test && knip",
-    "ci": "biome ci . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --deny-warnings && bun run typecheck && bun run build && bun run test:coverage && knip",
+    "check": "biome check . && oxlint packages test/e2e vitest.config.ts vitest.shared.ts --type-aware && bun run typecheck && bun run test && knip",
+    "ci": "biome ci . && oxlint packages test/e2e vitest.config.ts vitest.shared.ts --type-aware --deny-warnings && bun run typecheck && bun run build && bun run test:coverage && knip",
     "clean": "turbo run clean",
     "coverage": "turbo run test:coverage",
     "format": "biome format --write .",
     "knip": "knip",
-    "lint": "biome check . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware",
-    "lint:fix": "biome check --write . && oxlint packages e2e vitest.config.ts vitest.shared.ts --type-aware --fix",
+    "lint": "biome check . && oxlint packages test/e2e vitest.config.ts vitest.shared.ts --type-aware",
+    "lint:fix": "biome check --write . && oxlint packages test/e2e vitest.config.ts vitest.shared.ts --type-aware --fix",
     "test": "turbo run test",
     "test:coverage": "turbo run test:coverage",
     "typecheck": "tsgo --noEmit -p tsconfig.root.json && turbo run typecheck"

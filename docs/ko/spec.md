@@ -486,7 +486,8 @@ hena/
 │   ├── client/                   # @hena-dev/client    — typed protocol client
 │   ├── web-ui/                   # @hena-dev/web-ui    — default UI extension (§8)
 │   └── hena/                     # @hena-dev/hena      — CLI entrypoint: `hena serve`
-├── e2e/                          # cross-package e2e suites (server+UI+script provider)
+├── test/
+│   └── e2e/                      # cross-package e2e suites (server+UI+script provider)
 ├── flake.nix                     # nix devshell + CI toolchain (bun, tsgo, playwright)
 ├── biome.jsonc
 └── package.json                  # bun workspaces

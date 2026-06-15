@@ -5,7 +5,7 @@ description: Work with Effect v4 / effect-smol TypeScript code in this repo
 
 # Effect
 
-This codebase uses Effect for typed, composable TypeScript services, schemas, and workflows.
+This codebase uses Effect for typed, composable TypeScript services, schemas, and workflows. This skill is the authoritative source for Effect and Effect-test patterns in this repo; prefer it over rules restated elsewhere.
 
 ## Source Of Truth
 
@@ -31,8 +31,11 @@ Use the current Effect v4 / effect-smol source, not memory or older Effect v2/v3
 
 ## Testing Patterns
 
+- Import test helpers from `@effect/vitest` (every package depends on it via the root catalog), and prefer its `assert` over `expect` from `vitest`.
 - Use `@effect/vitest` (`it.effect(...)`) for tests that exercise Effect services, layers, runtime context, scoped resources, or platform integrations.
+- Use plain `it(...)` for pure synchronous tests.
 - Use `it.live(...)` for filesystem, git repositories, HTTP servers, sockets, child processes, locks, real time, and other live platform behavior.
-- Run tests from package directories such as `packages/core` (e.g. `bun --bun vitest run`); never run package tests from the repo root.
+- Do not use `Effect.runSync` in tests.
+- Test files are co-located in `packages/*/src/` as `*.test.ts`. Run tests from package directories such as `packages/core` (e.g. `bun --bun vitest run`); never run package tests from the repo root.
 - Prefer explicit test layers over ad hoc managed runtimes. Keep dependency provisioning visible in the test file.
 - Use scoped fixtures and finalizers for resources that must be cleaned up, including temporary directories, flags, databases, fibers, servers, and global state.

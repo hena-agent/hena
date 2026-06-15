@@ -27,6 +27,7 @@
     "typecheck": "tsgo --noEmit -p tsconfig.json"
   },
   "devDependencies": {
+    "@effect/vitest": "catalog:",
     "vitest": "4.1.8"
   }
 }

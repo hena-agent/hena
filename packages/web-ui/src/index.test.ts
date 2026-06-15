@@ -1,7 +1,7 @@
-import { expect, test } from "vitest";
+import { assert, it } from "@effect/vitest";
 
 import { webUiPackageName } from "./index";
 
-test("exposes the web-ui package name", () => {
-  expect(webUiPackageName).toBe("@hena-dev/web-ui");
+it("exposes the web-ui package name", () => {
+  assert.strictEqual(webUiPackageName, "@hena-dev/web-ui");
 });

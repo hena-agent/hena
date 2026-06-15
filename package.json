@@ -5,9 +5,14 @@
   "type": "module",
   "license": "MIT",
   "packageManager": "bun@1.3.14",
-  "workspaces": [
-    "packages/*"
-  ],
+  "workspaces": {
+    "packages": [
+      "packages/*"
+    ],
+    "catalog": {
+      "@effect/vitest": "4.0.0-beta.83"
+    }
+  },
   "scripts": {
     "build": "turbo run build",
     "check": "biome check . && oxlint packages test/e2e vitest.config.ts vitest.shared.ts --type-aware && bun run typecheck && bun run test && knip",

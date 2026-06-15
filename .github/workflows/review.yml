@@ -41,9 +41,6 @@ jobs:
       app-client-id: ${{ vars.GPT_REVIEWER_CLIENT_ID }}
       prompt: |
         Use the `thermo-nuclear-code-quality-review` skill to review it.
-        Leave code review comments line-by-line using the gh CLI.
-        The final response will be automatically posted as a PR comment.
-        Write the PR comment content and the final answer in Korean.
     secrets:
       app-private-key: ${{ secrets.GPT_REVIEWER_PRIVATE_KEY }}
       opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
@@ -57,10 +54,7 @@ jobs:
       variant: max
       app-client-id: ${{ vars.CLAUDE_REVIEWER_CLIENT_ID }}
       prompt: |
-        Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI.
-        Leave code review comments line-by-line using the gh CLI.
-        The final response will be automatically posted as a PR comment.
-        Write the PR comment content and the final answer in Korean.
+        Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments so you do not repeat the other reviewer: read both the top-level comments (`gh pr view --comments`) and the existing line-level review comments (`gh api repos/{owner}/{repo}/pulls/{number}/comments`).
     secrets:
       app-private-key: ${{ secrets.CLAUDE_REVIEWER_PRIVATE_KEY }}
       opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}

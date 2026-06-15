@@ -15,7 +15,7 @@ inputs:
     description: Token used by the OpenCode action to post review comments
     required: true
   prompt:
-    description: Full review prompt. The single source of truth lives in the caller workflow; this action does not provide a default to avoid drift.
+    description: Final prompt passed to opencode github run.
     required: true
 
 runs:

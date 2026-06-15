@@ -38,3 +38,6 @@ pnpm-debug.log*
 
 # Skill reference checkouts (e.g. effect skill clones effect-smol here)
 .agents/references/
+
+# Docs
+docs/

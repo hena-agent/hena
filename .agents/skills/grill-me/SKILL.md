@@ -38,6 +38,6 @@ Cover, as relevant:
 
 If repository facts are needed, inspect the codebase instead of asking the user. Do not ask me to provide information that can be determined locally.
 
-When an available user-input tool such as `request_user_input` fits the question, use it to ask one short question with a small set of mutually exclusive options. Otherwise, ask in plain text and present clear possible answers as a numbered list when that helps me answer quickly. Include your recommended option and mark it as recommended.
+When a user-input/question tool is available in the current environment, use it to ask one short question with a small set of mutually exclusive options. Otherwise, ask in plain text and present clear possible answers as a numbered list when that helps me answer quickly. Include your recommended option and mark it as recommended.
 
 Stop when the major branches of the design tree have been resolved. Then summarize the agreed design, remaining risks, assumptions, rejected alternatives, and next steps.

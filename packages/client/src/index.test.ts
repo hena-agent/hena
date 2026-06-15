@@ -1,7 +1,7 @@
-import { expect, test } from "vitest";
+import { assert, it } from "@effect/vitest";
 
 import { clientPackageName } from "./index";
 
-test("exposes the client package name", () => {
-  expect(clientPackageName).toBe("@hena-dev/client");
+it("exposes the client package name", () => {
+  assert.strictEqual(clientPackageName, "@hena-dev/client");
 });

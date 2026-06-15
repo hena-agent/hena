@@ -16,7 +16,6 @@
       "!**/node_modules"
     ]
   },
-  "plugins": ["./lint/no-classes.grit"],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",

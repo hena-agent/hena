@@ -1,14 +1,11 @@
 import { assert, it } from "@effect/vitest";
 import { Effect } from "effect";
 
-import { corePackageName, corePackageNameEffect } from "./index";
+import { makeRuntime } from "./index";
 
-it("exposes the core package name", () => {
-  assert.strictEqual(corePackageName, "@hena-dev/core");
-});
-
-it.effect("yields the core package name as an Effect", () =>
+it.effect("exposes a runtime constructor", () =>
   Effect.gen(function* () {
-    assert.strictEqual(yield* corePackageNameEffect, "@hena-dev/core");
+    const runtime = yield* makeRuntime;
+    assert.deepStrictEqual(yield* runtime.systemPrompt.sections, []);
   }),
 );

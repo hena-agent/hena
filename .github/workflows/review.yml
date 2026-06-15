@@ -40,7 +40,7 @@ jobs:
       variant: xhigh
       app-client-id: ${{ vars.GPT_REVIEWER_CLIENT_ID }}
       prompt: |
-        Use the `thermo-nuclear-code-quality-review` skill to review it. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+        Use the `thermo-nuclear-code-quality-review` skill to review it. Always answer in Korean.
     secrets:
       app-private-key: ${{ secrets.GPT_REVIEWER_PRIVATE_KEY }}
       opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
@@ -54,7 +54,7 @@ jobs:
       variant: max
       app-client-id: ${{ vars.CLAUDE_REVIEWER_CLIENT_ID }}
       prompt: |
-        Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI. Always answer in Korean — write BOTH your final summary answer and every comment/review you post on GitHub in Korean.
+        Use the `thermo-nuclear-code-quality-review` skill to review it. First read the existing PR comments using the gh CLI. Always answer in Korean.
     secrets:
       app-private-key: ${{ secrets.CLAUDE_REVIEWER_PRIVATE_KEY }}
       opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}

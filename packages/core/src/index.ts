@@ -37,9 +37,7 @@ export {
   ToolDecodeError,
   ToolExecutionError,
 } from "./error/agent-error";
-
 export { AgentEvent } from "./event/agent-event";
-
 export {
   RunEndEvent,
   RunStartEvent,
@@ -75,6 +73,21 @@ export {
   ToolInputStartEvent,
   ToolResultEvent,
 } from "./event/tool";
+export {
+  LanguageModel,
+  ModelRequest,
+  ToolChoice,
+  ToolSpec,
+} from "./port/language-model";
+export {
+  ModelFinishReason,
+  ModelStreamPart,
+} from "./port/model-stream-part";
+export type { Tool, ToolContext } from "./port/tool";
+export {
+  ToolResult,
+  ToolStreamChunk,
+} from "./port/tool";
 
 export const corePackageName = "@hena-dev/core";
 

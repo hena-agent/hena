@@ -1,29 +1,27 @@
 import { Schema } from "effect";
 
-const BrandedId = <const Name extends string>(
+const Branded = <Base extends Schema.Top, const Name extends string>(
+  base: Base,
   name: Name,
-): Schema.brand<typeof Schema.NonEmptyString, Name> =>
-  Schema.NonEmptyString.pipe(Schema.brand(name)).annotate({ identifier: name });
+): Schema.brand<Base["Rebuild"], Name> =>
+  base.pipe(Schema.brand(name)).annotate({ identifier: name });
+
 const NonNegativeIntBase = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-const NonNegativeInt = <const Name extends string>(
-  name: Name,
-): Schema.brand<(typeof NonNegativeIntBase)["Rebuild"], Name> =>
-  NonNegativeIntBase.pipe(Schema.brand(name)).annotate({ identifier: name });
 export const JsonValue = Schema.Json.annotate({ identifier: "JsonValue" });
 export type JsonValue = Schema.Schema.Type<typeof JsonValue>;
-export const TimestampMillis = NonNegativeInt("TimestampMillis");
+export const TimestampMillis = Branded(NonNegativeIntBase, "TimestampMillis");
 export type TimestampMillis = Schema.Schema.Type<typeof TimestampMillis>;
-export const TokenCount = NonNegativeInt("TokenCount");
+export const TokenCount = Branded(NonNegativeIntBase, "TokenCount");
 export type TokenCount = Schema.Schema.Type<typeof TokenCount>;
-export const SessionId = BrandedId("SessionId");
+export const SessionId = Branded(Schema.NonEmptyString, "SessionId");
 export type SessionId = Schema.Schema.Type<typeof SessionId>;
-export const RunId = BrandedId("RunId");
+export const RunId = Branded(Schema.NonEmptyString, "RunId");
 export type RunId = Schema.Schema.Type<typeof RunId>;
 
-export const MessageId = BrandedId("MessageId");
+export const MessageId = Branded(Schema.NonEmptyString, "MessageId");
 export type MessageId = Schema.Schema.Type<typeof MessageId>;
 
-export const ToolCallId = BrandedId("ToolCallId");
+export const ToolCallId = Branded(Schema.NonEmptyString, "ToolCallId");
 export type ToolCallId = Schema.Schema.Type<typeof ToolCallId>;
 
 export const TextPart = Schema.Struct({
@@ -63,7 +61,7 @@ export const ToolResultPart = Schema.Struct({
 export type ToolResultPart = Schema.Schema.Type<typeof ToolResultPart>;
 
 export const CustomPart = Schema.Struct({
-  type: Schema.String.check(Schema.isStartsWith("x-")),
+  type: Schema.TemplateLiteral(["x-", Schema.NonEmptyString]),
   data: JsonValue,
 }).annotate({ identifier: "CustomPart" });
 export type CustomPart = Schema.Schema.Type<typeof CustomPart>;

@@ -1,7 +1,12 @@
 import { assert, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import type { TimestampMillis, TokenCount } from "./index";
+import type {
+  Part as PartType,
+  TimestampMillis,
+  TokenCount,
+  ToolCallPart as ToolCallPartType,
+} from "./index";
 import {
   CustomPart,
   FilePart,
@@ -26,6 +31,14 @@ const numericBrandsAreDistinct: [
   TokenCountExtendsTimestampMillis,
 ] = [false, false];
 void numericBrandsAreDistinct;
+
+const assertToolCallPartNarrowing = (part: PartType): void => {
+  if (part.type === "tool-call") {
+    const toolCallPart: ToolCallPartType = part;
+    void toolCallPart;
+  }
+};
+void assertToolCallPartNarrowing;
 
 it("decodes branded ids", () => {
   assert.strictEqual(Schema.decodeUnknownSync(SessionId)("ses_123"), "ses_123");
@@ -67,6 +80,12 @@ it("rejects custom message parts with reserved types", () => {
 it("rejects custom message parts without the extension prefix", () => {
   assert.throws(() =>
     Schema.decodeUnknownSync(CustomPart)({ type: "custom", data: {} }),
+  );
+});
+
+it("rejects custom message parts without an extension suffix", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(CustomPart)({ type: "x-", data: {} }),
   );
 });
 

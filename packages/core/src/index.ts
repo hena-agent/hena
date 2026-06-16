@@ -1,24 +1,31 @@
 import { Effect } from "effect";
 
 export {
+  Message,
+  Usage,
+} from "./message";
+
+export {
   CustomPart,
   FilePart,
-  JsonValue,
-  Message,
-  MessageId,
   Part,
   ReasoningPart,
+  TextPart,
+  ToolCallPart,
+  ToolResultPart,
+} from "./parts";
+
+export {
+  JsonValue,
+  MediaType,
+  MessageId,
   RunId,
   SessionId,
-  TextPart,
   TimestampMillis,
   TokenCount,
   ToolCallId,
-  ToolCallPart,
   ToolName,
-  ToolResultPart,
-  Usage,
-} from "./domain";
+} from "./primitives";
 
 export const corePackageName = "@hena-dev/core";
 

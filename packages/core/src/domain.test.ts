@@ -2,6 +2,8 @@ import { assert, it } from "@effect/vitest";
 import { Schema } from "effect";
 
 import type {
+  FilePart as FilePartType,
+  MediaType,
   Part as PartType,
   TimestampMillis,
   TokenCount,
@@ -31,6 +33,16 @@ const numericBrandsAreDistinct: [
   TokenCountExtendsTimestampMillis,
 ] = [false, false];
 void numericBrandsAreDistinct;
+
+type FilePartMediaTypeMatchesMediaType = [
+  FilePartType["mediaType"] extends MediaType ? true : false,
+  MediaType extends FilePartType["mediaType"] ? true : false,
+];
+const filePartMediaTypeUsesMediaType: FilePartMediaTypeMatchesMediaType = [
+  true,
+  true,
+];
+void filePartMediaTypeUsesMediaType;
 
 const assertToolCallPartNarrowing = (part: PartType): void => {
   if (part.type === "tool-call") {

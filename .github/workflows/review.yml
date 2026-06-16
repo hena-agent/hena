@@ -46,8 +46,8 @@ jobs:
       opencode-auth-json: ${{ secrets.OPENCODE_AUTH_JSON }}
 
   claude-review:
-    # Only starts after gpt-review completes successfully.
-    needs: gpt-review
+    # Runs in parallel with gpt-review; both start once ci passes.
+    needs: ci
     uses: ./.github/workflows/_opencode-review.yml
     with:
       model: anthropic/claude-opus-4-8

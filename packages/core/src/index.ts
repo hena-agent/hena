@@ -10,6 +10,8 @@ export {
   RunId,
   SessionId,
   TextPart,
+  TimestampMillis,
+  TokenCount,
   ToolCallId,
   ToolCallPart,
   ToolResultPart,

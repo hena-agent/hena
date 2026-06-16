@@ -1,29 +1,30 @@
 import { Schema } from "effect";
 
-export const SessionId = Schema.String.pipe(Schema.brand("SessionId")).annotate(
-  {
-    identifier: "SessionId",
-  },
-);
+const BrandedId = <const Name extends string>(
+  name: Name,
+): Schema.brand<typeof Schema.String, Name> =>
+  Schema.String.pipe(Schema.brand(name)).annotate({ identifier: name });
+
+export const TimestampMillis = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).annotate({ identifier: "TimestampMillis" });
+export type TimestampMillis = Schema.Schema.Type<typeof TimestampMillis>;
+
+export const TokenCount = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+).annotate({ identifier: "TokenCount" });
+export type TokenCount = Schema.Schema.Type<typeof TokenCount>;
+
+export const SessionId = BrandedId("SessionId");
 export type SessionId = Schema.Schema.Type<typeof SessionId>;
 
-export const RunId = Schema.String.pipe(Schema.brand("RunId")).annotate({
-  identifier: "RunId",
-});
+export const RunId = BrandedId("RunId");
 export type RunId = Schema.Schema.Type<typeof RunId>;
 
-export const MessageId = Schema.String.pipe(Schema.brand("MessageId")).annotate(
-  {
-    identifier: "MessageId",
-  },
-);
+export const MessageId = BrandedId("MessageId");
 export type MessageId = Schema.Schema.Type<typeof MessageId>;
 
-export const ToolCallId = Schema.String.pipe(
-  Schema.brand("ToolCallId"),
-).annotate({
-  identifier: "ToolCallId",
-});
+export const ToolCallId = BrandedId("ToolCallId");
 export type ToolCallId = Schema.Schema.Type<typeof ToolCallId>;
 
 export const TextPart = Schema.Struct({
@@ -41,7 +42,7 @@ export type ReasoningPart = Schema.Schema.Type<typeof ReasoningPart>;
 export const FilePart = Schema.Struct({
   type: Schema.Literal("file"),
   mediaType: Schema.String,
-  data: Schema.Unknown,
+  data: Schema.String,
 }).annotate({ identifier: "FilePart" });
 export type FilePart = Schema.Schema.Type<typeof FilePart>;
 
@@ -63,7 +64,7 @@ export const ToolResultPart = Schema.Struct({
 export type ToolResultPart = Schema.Schema.Type<typeof ToolResultPart>;
 
 export const CustomPart = Schema.Struct({
-  type: Schema.String,
+  type: Schema.String.check(Schema.isStartsWith("x-")),
   data: Schema.Unknown,
 }).annotate({ identifier: "CustomPart" });
 export type CustomPart = Schema.Schema.Type<typeof CustomPart>;
@@ -83,15 +84,15 @@ export const Message = Schema.Struct({
   role: Schema.Literals(["system", "user", "assistant", "tool"]),
   parts: Schema.Array(Part),
   metadata: Schema.optional(Schema.Record(Schema.String, Schema.Unknown)),
-  createdAt: Schema.Number,
+  createdAt: TimestampMillis,
 }).annotate({ identifier: "Message" });
 export type Message = Schema.Schema.Type<typeof Message>;
 
 export const Usage = Schema.Struct({
-  inputTokens: Schema.optional(Schema.Number),
-  outputTokens: Schema.optional(Schema.Number),
-  reasoningTokens: Schema.optional(Schema.Number),
-  cacheReadTokens: Schema.optional(Schema.Number),
-  cacheWriteTokens: Schema.optional(Schema.Number),
+  inputTokens: Schema.optional(TokenCount),
+  outputTokens: Schema.optional(TokenCount),
+  reasoningTokens: Schema.optional(TokenCount),
+  cacheReadTokens: Schema.optional(TokenCount),
+  cacheWriteTokens: Schema.optional(TokenCount),
 }).annotate({ identifier: "Usage" });
 export type Usage = Schema.Schema.Type<typeof Usage>;

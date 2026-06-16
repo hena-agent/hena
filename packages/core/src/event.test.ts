@@ -167,11 +167,12 @@ it("decodes event sequence and part identifiers", () => {
 });
 
 it("round-trips every registered event fixture", () => {
-  const fixtures = Object.values(agentEventFixtures);
+  const fixtures = Object.entries(agentEventFixtures);
 
   assert.strictEqual(fixtures.length, AgentEventSchemas.length);
 
-  for (const event of fixtures) {
+  for (const [type, event] of fixtures) {
+    assert.strictEqual(Schema.decodeUnknownSync(AgentEvent)(event).type, type);
     assertAgentEventRoundTrip(event);
   }
 });

@@ -27,36 +27,32 @@ const TextStreamFields = {
   partId: PartId,
 };
 
-type ReservedEventField = keyof typeof EventBaseFields | "type";
+type ReservedEventField<Owned extends Schema.Struct.Fields> =
+  | keyof typeof EventBaseFields
+  | keyof Owned
+  | "type";
 
-type EventFieldsInput<Fields extends Schema.Struct.Fields> =
-  Extract<keyof Fields, ReservedEventField> extends never ? Fields : never;
+type EventFieldsInput<
+  Owned extends Schema.Struct.Fields,
+  Fields extends Schema.Struct.Fields,
+> =
+  Extract<keyof Fields, ReservedEventField<Owned>> extends never
+    ? Fields
+    : never;
 
-// biome-ignore lint/nursery/useExplicitType: preserve Effect Schema service inference.
-export const defineEvent = <
-  const Type extends string,
-  const Fields extends Schema.Struct.Fields,
->(
-  type: Type,
-  fields: EventFieldsInput<Fields>,
-) =>
-  Schema.Struct({
-    ...fields,
-    ...EventBaseFields,
-    type: Schema.Literal(type),
-  }).annotate({ identifier: eventIdentifier(type) });
+const makeEventFactory =
+  <const Owned extends Schema.Struct.Fields>(owned: Owned) =>
+  // biome-ignore lint/nursery/useExplicitType: preserve Effect Schema service inference.
+  <const Type extends string, const Fields extends Schema.Struct.Fields>(
+    type: Type,
+    fields: EventFieldsInput<Owned, Fields>,
+  ) =>
+    Schema.Struct({
+      ...fields,
+      ...owned,
+      ...EventBaseFields,
+      type: Schema.Literal(type),
+    }).annotate({ identifier: eventIdentifier(type) });
 
-// biome-ignore lint/nursery/useExplicitType: preserve Effect Schema service inference.
-export const defineTextStreamEvent = <
-  const Type extends string,
-  const Fields extends Schema.Struct.Fields,
->(
-  type: Type,
-  fields: EventFieldsInput<Fields>,
-) =>
-  Schema.Struct({
-    ...fields,
-    ...TextStreamFields,
-    ...EventBaseFields,
-    type: Schema.Literal(type),
-  }).annotate({ identifier: eventIdentifier(type) });
+export const defineEvent = makeEventFactory({});
+export const defineTextStreamEvent = makeEventFactory(TextStreamFields);

@@ -16,9 +16,11 @@ export {
 } from "./domain/parts";
 
 export {
+  EventSeq,
   JsonValue,
   MediaType,
   MessageId,
+  PartId,
   RunId,
   SessionId,
   TimestampMillis,
@@ -34,6 +36,43 @@ export {
   ToolDecodeError,
   ToolExecutionError,
 } from "./error/agent-error";
+
+export { AgentEvent } from "./event/agent-event";
+
+export {
+  RunEndEvent,
+  RunStartEvent,
+  TurnEndEvent,
+  TurnStartEvent,
+} from "./event/lifecycle";
+
+export {
+  MessageEndEvent,
+  MessageStartEvent,
+  ReasoningDeltaEvent,
+  ReasoningEndEvent,
+  ReasoningStartEvent,
+  TextDeltaEvent,
+  TextEndEvent,
+  TextStartEvent,
+} from "./event/message";
+
+export {
+  DiagnosticEvent,
+  ErrorEvent,
+  UsageEvent,
+} from "./event/terminal";
+
+export {
+  ToolCallEvent,
+  ToolExecutionDeltaEvent,
+  ToolExecutionEndEvent,
+  ToolExecutionStartEvent,
+  ToolInputDeltaEvent,
+  ToolInputEndEvent,
+  ToolInputStartEvent,
+  ToolResultEvent,
+} from "./event/tool";
 
 export const corePackageName = "@hena-dev/core";
 

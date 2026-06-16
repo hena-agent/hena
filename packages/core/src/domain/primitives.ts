@@ -20,6 +20,9 @@ export type TimestampMillis = Schema.Schema.Type<typeof TimestampMillis>;
 export const TokenCount = Branded(NonNegativeIntBase, "TokenCount");
 export type TokenCount = Schema.Schema.Type<typeof TokenCount>;
 
+export const EventSeq = Branded(NonNegativeIntBase, "EventSeq");
+export type EventSeq = Schema.Schema.Type<typeof EventSeq>;
+
 export const MediaType = Branded(Schema.String.check(isMediaType), "MediaType");
 export type MediaType = Schema.Schema.Type<typeof MediaType>;
 
@@ -31,6 +34,9 @@ export type RunId = Schema.Schema.Type<typeof RunId>;
 
 export const MessageId = Branded(Schema.NonEmptyString, "MessageId");
 export type MessageId = Schema.Schema.Type<typeof MessageId>;
+
+export const PartId = Branded(Schema.NonEmptyString, "PartId");
+export type PartId = Schema.Schema.Type<typeof PartId>;
 
 export const ToolCallId = Branded(Schema.NonEmptyString, "ToolCallId");
 export type ToolCallId = Schema.Schema.Type<typeof ToolCallId>;

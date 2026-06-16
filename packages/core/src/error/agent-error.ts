@@ -2,6 +2,12 @@ import { Schema } from "effect";
 
 import { NonNegativeIntBase, ToolCallId, ToolName } from "../domain/primitives";
 
+const ToolError = Schema.Struct({
+  toolCallId: ToolCallId,
+  toolName: ToolName,
+  message: Schema.String,
+});
+
 export class ProviderError extends Schema.TaggedErrorClass<ProviderError>()(
   "ProviderError",
   { message: Schema.String },
@@ -9,20 +15,12 @@ export class ProviderError extends Schema.TaggedErrorClass<ProviderError>()(
 
 export class ToolDecodeError extends Schema.TaggedErrorClass<ToolDecodeError>()(
   "ToolDecodeError",
-  {
-    toolCallId: ToolCallId,
-    name: ToolName,
-    message: Schema.String,
-  },
+  ToolError,
 ) {}
 
 export class ToolExecutionError extends Schema.TaggedErrorClass<ToolExecutionError>()(
   "ToolExecutionError",
-  {
-    toolCallId: ToolCallId,
-    name: ToolName,
-    message: Schema.String,
-  },
+  ToolError,
 ) {}
 
 export class MaxStepsExceeded extends Schema.TaggedErrorClass<MaxStepsExceeded>()(

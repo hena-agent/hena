@@ -18,3 +18,10 @@ export {
   ToolResultPart,
 } from "./domain/part";
 export { Usage } from "./domain/usage";
+export type { AgentError } from "./error/error";
+export {
+  MaxStepsExceeded,
+  ProviderError,
+  ToolDecodeError,
+  ToolExecutionError,
+} from "./error/error";

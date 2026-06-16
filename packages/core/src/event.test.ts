@@ -181,9 +181,19 @@ it("round-trips every registered event fixture", () => {
 
 it("exports every agent event schema from the package root", () => {
   const publicRootValues = new Set(Object.values(Root));
+  const registeredSchemas: ReadonlySet<unknown> = new Set(AgentEventSchemas);
+  const publicEventSchemas = Object.entries(Root)
+    .filter(([name]) => name.endsWith("Event") && name !== "AgentEvent")
+    .map(([, schema]) => schema);
 
   for (const schema of AgentEventSchemas) {
     assert.ok(publicRootValues.has(schema));
+  }
+
+  assert.strictEqual(publicEventSchemas.length, AgentEventSchemas.length);
+
+  for (const schema of publicEventSchemas) {
+    assert.ok(registeredSchemas.has(schema));
   }
 });
 

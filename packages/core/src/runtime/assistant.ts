@@ -1,5 +1,5 @@
 import { Effect } from "effect";
-import { Prompt, type Response } from "effect/unstable/ai";
+import { Prompt, type Response, type Tool } from "effect/unstable/ai";
 
 import { appendAssistantPart } from "./assistant-parts";
 import { ResponsePartError } from "./errors";
@@ -9,31 +9,18 @@ export interface AssistantResult {
   readonly toolCalls: ReadonlyArray<Prompt.ToolCallPart>;
 }
 
-export type StreamPart =
-  | Response.TextStartPart
-  | Response.TextDeltaPart
-  | Response.TextEndPart
-  | Response.ReasoningStartPart
-  | Response.ReasoningDeltaPart
-  | Response.ReasoningEndPart
-  | Response.ToolParamsStartPart
-  | Response.ToolParamsDeltaPart
-  | Response.ToolParamsEndPart
-  | Response.ToolCallPart<string, unknown>
-  | Response.ToolResultPart<string, unknown, unknown>
-  | Response.ToolApprovalRequestPart
-  | Response.FilePart
-  | Response.DocumentSourcePart
-  | Response.UrlSourcePart
-  | Response.ResponseMetadataPart
-  | Response.FinishPart
-  | Response.ErrorPart;
+export type StreamPart = Response.StreamPart<Record<string, Tool.Any>>;
+
+export interface ActiveTextPart {
+  readonly index: number;
+  readonly text: string;
+}
 
 export interface AssistantState {
   readonly content: Array<Prompt.AssistantMessagePart>;
   readonly toolCalls: Array<Prompt.ToolCallPart>;
-  readonly text: Map<string, string>;
-  readonly reasoning: Map<string, string>;
+  readonly text: Map<string, ActiveTextPart>;
+  readonly reasoning: Map<string, ActiveTextPart>;
 }
 
 export const makeAssistantState = (): AssistantState => ({

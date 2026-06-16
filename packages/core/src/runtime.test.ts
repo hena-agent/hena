@@ -271,6 +271,45 @@ it.effect("folds all supported assistant stream parts", () =>
   }),
 );
 
+it.effect("keeps active text before interleaved tool calls", () =>
+  Effect.gen(function* () {
+    const state = makeAssistantState();
+
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-start", { id: "t" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-delta", { id: "t", delta: "before" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.toolCallPart({
+        id: "call-1",
+        name: "lookup",
+        params: {},
+        providerExecuted: false,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-end", { id: "t" }),
+    );
+
+    const result = finishAssistant(state);
+
+    assert.deepStrictEqual(
+      result.message.content.map((part) => part.type),
+      ["text", "tool-call"],
+    );
+    assert.deepStrictEqual(
+      result.message.content[0],
+      Prompt.textPart({ text: "before" }),
+    );
+  }),
+);
+
 it.effect("publishes message deltas before the provider stream finishes", () =>
   Effect.gen(function* () {
     const runtime = yield* Runtime.make();
@@ -314,10 +353,108 @@ it.effect("publishes message deltas before the provider stream finishes", () =>
   }),
 );
 
-it.effect("isolates failed tool handlers as failed tool results", () =>
+it.effect("serializes concurrent prompts", () =>
   Effect.gen(function* () {
     const runtime = yield* Runtime.make();
-    const fail = Tool.make("fail", { success: Schema.String });
+    const calls = yield* Ref.make(0);
+    const firstStarted = yield* Deferred.make<void>();
+    const releaseFirst = yield* Deferred.make<void>();
+    const model = yield* LanguageModel.make({
+      generateText: () => Effect.die("unused generateText"),
+      streamText: () =>
+        Stream.unwrap(
+          Ref.modify(calls, (count) => {
+            const next = count + 1;
+            return [next, next];
+          }).pipe(
+            Effect.map((call) =>
+              call === 1
+                ? Stream.fromEffect(
+                    Deferred.succeed(firstStarted, undefined).pipe(
+                      Effect.as(textDelta("first")),
+                    ),
+                  ).pipe(
+                    Stream.concat(
+                      Stream.fromEffect(
+                        Deferred.await(releaseFirst).pipe(
+                          Effect.as(finish("stop")),
+                        ),
+                      ),
+                    ),
+                  )
+                : Stream.fromIterable([textDelta("second"), finish("stop")]),
+            ),
+          ),
+        ),
+    });
+
+    yield* runtime.registerProvider(model);
+    const first = yield* runtime
+      .prompt(userMessage("first"))
+      .pipe(Effect.forkChild({ startImmediately: true }));
+
+    yield* Deferred.await(firstStarted);
+    const second = yield* runtime
+      .prompt(userMessage("second"))
+      .pipe(Effect.forkChild({ startImmediately: true }));
+    yield* Effect.yieldNow;
+
+    assert.strictEqual(yield* Ref.get(calls), 1);
+
+    yield* Deferred.succeed(releaseFirst, undefined);
+    yield* Fiber.join(first);
+    yield* Fiber.join(second);
+
+    assert.strictEqual(yield* Ref.get(calls), 2);
+  }),
+);
+
+it.effect(
+  "records return-mode tool handler failures as failed tool results",
+  () =>
+    Effect.gen(function* () {
+      const runtime = yield* Runtime.make();
+      const fail = Tool.make("fail", {
+        success: Schema.String,
+        failure: Schema.String,
+        failureMode: "return",
+      });
+      const model = yield* scriptedModel([
+        [
+          { type: "tool-call", id: "fail-1", name: "fail", params: {} },
+          finish("tool-calls"),
+        ],
+      ]);
+
+      yield* runtime.registerProvider(model);
+      yield* runtime.registerTool(fail, () => Effect.fail("boom"));
+      yield* runtime.prompt(userMessage("use fail"));
+
+      const toolMessages = (yield* runtime.history()).filter(
+        (entry): entry is Prompt.ToolMessage => entry.role === "tool",
+      );
+      const message = toolMessages[0];
+
+      assert.notStrictEqual(message, undefined);
+      if (message === undefined) {
+        return;
+      }
+      const part = message.content[0];
+      assert.strictEqual(part?.type, "tool-result");
+      if (part?.type !== "tool-result") {
+        return;
+      }
+      assert.strictEqual(part.result, "boom");
+    }),
+);
+
+it.effect("fails default-mode tool handler failures", () =>
+  Effect.gen(function* () {
+    const runtime = yield* Runtime.make();
+    const fail = Tool.make("fail", {
+      success: Schema.String,
+      failure: Schema.String,
+    });
     const model = yield* scriptedModel([
       [
         { type: "tool-call", id: "fail-1", name: "fail", params: {} },
@@ -327,23 +464,16 @@ it.effect("isolates failed tool handlers as failed tool results", () =>
 
     yield* runtime.registerProvider(model);
     yield* runtime.registerTool(fail, () => Effect.fail("boom"));
-    yield* runtime.prompt(userMessage("use fail"));
-
-    const toolMessages = (yield* runtime.history()).filter(
-      (entry): entry is Prompt.ToolMessage => entry.role === "tool",
+    const result = yield* Effect.result(
+      runtime.prompt(userMessage("use fail")),
     );
-    const message = toolMessages[0];
+    const history = yield* runtime.history();
 
-    assert.notStrictEqual(message, undefined);
-    if (message === undefined) {
-      return;
-    }
-    const part = message.content[0];
-    assert.strictEqual(part?.type, "tool-result");
-    if (part?.type !== "tool-result") {
-      return;
-    }
-    assert.strictEqual(part.result, "boom");
+    assert.strictEqual(result._tag, "Failure");
+    assert.deepStrictEqual(
+      history.map((entry) => entry.role),
+      ["user", "assistant"],
+    );
   }),
 );
 
@@ -385,6 +515,72 @@ it.effect("executes requested tools and continues the loop", () =>
         .map((event) => event.type)
         .filter((type) => type.startsWith("tool_")),
       ["tool_start", "tool_end"],
+    );
+    assert.deepStrictEqual(
+      events.flatMap((event) =>
+        event.type === "tool_start" ? [event.part.id] : [],
+      ),
+      ["call-1"],
+    );
+    assert.deepStrictEqual(
+      events.flatMap((event) =>
+        event.type === "tool_end" ? [event.part.id] : [],
+      ),
+      ["call-1"],
+    );
+  }),
+);
+
+it.effect("publishes preliminary tool results without recording them", () =>
+  Effect.gen(function* () {
+    const runtime = yield* Runtime.make();
+    const progress = Tool.make("progress", { success: Schema.String });
+    const model = yield* scriptedModel([
+      [
+        {
+          type: "tool-call",
+          id: "call-1",
+          name: "progress",
+          params: {},
+        },
+        finish("tool-calls"),
+      ],
+      [textDelta("done"), finish("stop")],
+    ]);
+
+    yield* runtime.registerProvider(model);
+    yield* runtime.registerTool(progress, (_params, context) =>
+      Effect.gen(function* () {
+        yield* context.preliminary("working");
+        return "done";
+      }),
+    );
+    yield* runtime.prompt(userMessage("use progress"));
+
+    const history = yield* runtime.history();
+    const events = yield* runtime.events();
+    const toolMessages = history.filter(
+      (entry): entry is Prompt.ToolMessage => entry.role === "tool",
+    );
+
+    assert.deepStrictEqual(
+      events.flatMap((event) =>
+        event.type === "tool_end" ? [event.part.preliminary] : [],
+      ),
+      [true, false],
+    );
+    assert.deepStrictEqual(
+      toolMessages[0]?.content.map((part) => part.type),
+      ["tool-result"],
+    );
+    assert.deepStrictEqual(
+      toolMessages[0]?.content[0],
+      Prompt.toolResultPart({
+        id: "call-1",
+        name: "progress",
+        isFailure: false,
+        result: "done",
+      }),
     );
   }),
 );
@@ -468,33 +664,38 @@ it.effect("fails when no provider is registered", () =>
   }),
 );
 
-it.effect("fails stream error parts and rolls back transcript", () =>
-  Effect.gen(function* () {
-    const runtime = yield* Runtime.make();
-    const model = yield* scriptedModel([
-      [textDelta("hello"), errorPart("boom")],
-    ]);
+it.effect(
+  "fails stream error parts without rolling back observed transcript",
+  () =>
+    Effect.gen(function* () {
+      const runtime = yield* Runtime.make();
+      const model = yield* scriptedModel([
+        [textDelta("hello"), errorPart("boom")],
+      ]);
 
-    yield* runtime.registerProvider(model);
-    const result = yield* Effect.result(runtime.prompt(userMessage("hi")));
-    const history = yield* runtime.history();
-    const events = yield* runtime.events();
+      yield* runtime.registerProvider(model);
+      const result = yield* Effect.result(runtime.prompt(userMessage("hi")));
+      const history = yield* runtime.history();
+      const events = yield* runtime.events();
 
-    assert.strictEqual(result._tag, "Failure");
-    assert.deepStrictEqual(history, []);
-    assert.deepStrictEqual(
-      events.map((event) => event.type),
-      [
-        "session_start",
-        "turn_start",
-        "message_start",
-        "message_delta",
-        "message_delta",
-        "error",
-        "idle",
-      ],
-    );
-  }),
+      assert.strictEqual(result._tag, "Failure");
+      assert.deepStrictEqual(
+        history.map((entry) => entry.role),
+        ["user"],
+      );
+      assert.deepStrictEqual(
+        events.map((event) => event.type),
+        [
+          "session_start",
+          "turn_start",
+          "message_start",
+          "message_delta",
+          "message_delta",
+          "error",
+          "idle",
+        ],
+      );
+    }),
 );
 
 it.effect("fails runaway tool loops with a loop limit error", () =>
@@ -532,7 +733,7 @@ it.effect("validates registered tool parameters", () =>
     const registered = makeRegisteredTool(echo, ({ text }) =>
       Effect.succeed(text),
     );
-    const result = yield* Effect.result(registered.execute({ text: 1 }));
+    const result = yield* Effect.result(registered.handle({ text: 1 }));
 
     assert.strictEqual(result._tag, "Failure");
   }),

@@ -5,7 +5,8 @@ export type RuntimeError =
   | AiError.AiError
   | MissingProvider
   | ResponsePartError
-  | LoopLimitExceeded;
+  | LoopLimitExceeded
+  | ToolExecutionError;
 
 export class MissingProvider extends Schema.TaggedErrorClass<MissingProvider>()(
   "MissingProvider",
@@ -23,5 +24,12 @@ export class LoopLimitExceeded extends Schema.TaggedErrorClass<LoopLimitExceeded
   "LoopLimitExceeded",
   {
     maxSteps: Schema.Number,
+  },
+) {}
+
+export class ToolExecutionError extends Schema.TaggedErrorClass<ToolExecutionError>()(
+  "ToolExecutionError",
+  {
+    error: Schema.Unknown,
   },
 ) {}

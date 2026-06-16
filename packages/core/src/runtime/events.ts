@@ -1,5 +1,5 @@
 import { Effect, PubSub, Ref, Stream } from "effect";
-import type { Prompt } from "effect/unstable/ai";
+import type { Prompt, Response } from "effect/unstable/ai";
 
 import type { StreamPart } from "./assistant";
 
@@ -17,8 +17,11 @@ export type RuntimeEvent =
       readonly entry: Prompt.AssistantMessage;
       readonly step: number;
     }
-  | { readonly type: "tool_start"; readonly entry: Prompt.AssistantMessage }
-  | { readonly type: "tool_end"; readonly entry: Prompt.ToolMessage }
+  | { readonly type: "tool_start"; readonly part: Prompt.ToolCallPart }
+  | {
+      readonly type: "tool_end";
+      readonly part: Response.ToolResultPart<string, unknown, unknown>;
+    }
   | { readonly type: "turn_end"; readonly step: number }
   | { readonly type: "idle" }
   | { readonly type: "error"; readonly error: unknown };
@@ -40,13 +43,15 @@ export const RuntimeEvent = {
     entry,
     step,
   }),
-  toolStart: (entry: Prompt.AssistantMessage): RuntimeEvent => ({
+  toolStart: (part: Prompt.ToolCallPart): RuntimeEvent => ({
     type: "tool_start",
-    entry,
+    part,
   }),
-  toolEnd: (entry: Prompt.ToolMessage): RuntimeEvent => ({
+  toolEnd: (
+    part: Response.ToolResultPart<string, unknown, unknown>,
+  ): RuntimeEvent => ({
     type: "tool_end",
-    entry,
+    part,
   }),
   turnEnd: (step: number): RuntimeEvent => ({ type: "turn_end", step }),
   idle: (): RuntimeEvent => ({ type: "idle" }),
@@ -59,12 +64,16 @@ export interface EventLog {
   readonly subscribe: () => Stream.Stream<RuntimeEvent>;
 }
 
+const maxEventHistory = 1024;
+
 export const makeEventLog: Effect.Effect<EventLog> = Effect.gen(function* () {
   const pubsub = yield* PubSub.unbounded<RuntimeEvent>();
   const history = yield* Ref.make<ReadonlyArray<RuntimeEvent>>([]);
 
   const publish = Effect.fnUntraced(function* (event: RuntimeEvent) {
-    yield* Ref.update(history, (events) => [...events, event]);
+    yield* Ref.update(history, (events) =>
+      [...events, event].slice(-maxEventHistory),
+    );
     yield* PubSub.publish(pubsub, event);
   });
 

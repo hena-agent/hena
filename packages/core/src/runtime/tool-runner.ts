@@ -1,86 +1,84 @@
-import { Effect } from "effect";
+import { Effect, Option, Stream } from "effect";
 import { Prompt } from "effect/unstable/ai";
 
 import type { RuntimeContext } from "./context";
+import { ToolExecutionError } from "./errors";
 import { RuntimeEvent } from "./events";
 import type { RegisteredTool } from "./tool";
+import { publishToolResult } from "./tool-result";
 import { appendEntry } from "./transcript";
 
 export const runTools: (
   context: RuntimeContext,
   calls: ReadonlyArray<Prompt.ToolCallPart>,
-) => Effect.Effect<void> = Effect.fnUntraced(function* (context, calls) {
-  if (calls.length === 0) {
-    return;
-  }
+) => Effect.Effect<void, ToolExecutionError> = Effect.fnUntraced(
+  function* (context, calls) {
+    if (calls.length === 0) {
+      return;
+    }
 
-  yield* Effect.forEach(
-    calls,
-    (call) => context.events.publish(RuntimeEvent.toolStart(callMessage(call))),
-    { discard: true },
-  );
-  const parts = yield* Effect.forEach(calls, (call) => runTool(context, call), {
-    concurrency: "unbounded",
-  });
-  const message = Prompt.toolMessage({ content: parts });
+    yield* Effect.forEach(
+      calls,
+      (call) => context.events.publish(RuntimeEvent.toolStart(call)),
+      { discard: true },
+    );
+    const parts = yield* Effect.forEach(
+      calls,
+      (call) => runTool(context, call),
+      {
+        concurrency: "unbounded",
+      },
+    );
+    const message = Prompt.toolMessage({ content: parts });
 
-  yield* appendEntry(context.entries, message);
-  yield* Effect.forEach(
-    parts,
-    (part) =>
-      context.events.publish(
-        RuntimeEvent.toolEnd(Prompt.toolMessage({ content: [part] })),
-      ),
-    { discard: true },
-  );
-});
+    yield* appendEntry(context.entries, message);
+  },
+);
 
 const runTool: (
   context: RuntimeContext,
   call: Prompt.ToolCallPart,
-) => Effect.Effect<Prompt.ToolResultPart> = Effect.fnUntraced(
-  function* (context, call) {
+) => Effect.Effect<Prompt.ToolResultPart, ToolExecutionError> =
+  Effect.fnUntraced(function* (context, call) {
     const tool = yield* context.registry.tool(call.name);
-    return yield* toolResult(tool, call);
-  },
-);
+    return yield* runRegisteredTool(context, tool, call);
+  });
 
-const toolResult = (
+const runRegisteredTool = (
+  context: RuntimeContext,
   tool: RegisteredTool | undefined,
   call: Prompt.ToolCallPart,
-): Effect.Effect<Prompt.ToolResultPart> => {
+): Effect.Effect<Prompt.ToolResultPart, ToolExecutionError> => {
   /* istanbul ignore next -- Effect AI decodes tool calls against the toolkit. */
   if (tool === undefined) {
-    return Effect.succeed(failedResult(call, `Unknown tool: ${call.name}`));
+    return publishToolResult(context, call, {
+      result: `Unknown tool: ${call.name}`,
+      encodedResult: `Unknown tool: ${call.name}`,
+      isFailure: true,
+      preliminary: false,
+    });
   }
-  return Effect.map(Effect.result(tool.execute(call.params)), (result) =>
-    result._tag === "Success"
-      ? successResult(call, result.success)
-      : failedResult(call, result.failure),
-  );
+  return Effect.gen(function* () {
+    const results = yield* tool.handle(call.params).pipe(
+      Effect.flatMap((stream) =>
+        Stream.runFoldEffect(
+          stream,
+          () => Option.none<Prompt.ToolResultPart>(),
+          (final, result) =>
+            Effect.map(publishToolResult(context, call, result), (part) =>
+              result.preliminary === true ? final : Option.some(part),
+            ),
+        ),
+      ),
+      Effect.mapError((error) => new ToolExecutionError({ error })),
+    );
+
+    /* istanbul ignore next -- Toolkit handlers always emit a final result. */
+    if (Option.isNone(results)) {
+      return yield* new ToolExecutionError({
+        error: `Tool handler did not produce a final result: ${call.name}`,
+      });
+    }
+    return results.value;
+  });
 };
-
-const callMessage = (call: Prompt.ToolCallPart): Prompt.AssistantMessage =>
-  Prompt.assistantMessage({ content: [call] });
-
-const successResult = (
-  call: Prompt.ToolCallPart,
-  result: unknown,
-): Prompt.ToolResultPart =>
-  Prompt.toolResultPart({
-    id: call.id,
-    name: call.name,
-    isFailure: false,
-    result,
-  });
-
-const failedResult = (
-  call: Prompt.ToolCallPart,
-  result: unknown,
-): Prompt.ToolResultPart =>
-  Prompt.toolResultPart({
-    id: call.id,
-    name: call.name,
-    isFailure: true,
-    result,
-  });

@@ -1,4 +1,5 @@
 import { Effect, Ref, type Schema, type Stream } from "effect";
+import * as Semaphore from "effect/Semaphore";
 import type { LanguageModel, Prompt } from "effect/unstable/ai";
 
 import type { RuntimeError } from "./errors";
@@ -23,7 +24,7 @@ export interface Runtime {
     E,
   >(
     tool: RuntimeTool<Name, Parameters, Success>,
-    execute: ToolHandler<Parameters, Success, E>,
+    execute: ToolHandler<Name, Parameters, Success, E>,
   ) => Effect.Effect<void>;
   readonly prompt: (
     message: Prompt.Message,
@@ -39,6 +40,7 @@ const makeRuntime: () => Effect.Effect<Runtime> = Effect.fnUntraced(
     const events = yield* makeEventLog;
     const registry = yield* makeRegistry;
     const sessionStarted = yield* Ref.make(false);
+    const promptSemaphore = yield* Semaphore.make(1);
     const registerTool = <
       const Name extends string,
       Parameters extends Schema.Decoder<unknown>,
@@ -46,14 +48,17 @@ const makeRuntime: () => Effect.Effect<Runtime> = Effect.fnUntraced(
       E,
     >(
       tool: RuntimeTool<Name, Parameters, Success>,
-      execute: ToolHandler<Parameters, Success, E>,
+      execute: ToolHandler<Name, Parameters, Success, E>,
     ): Effect.Effect<void> =>
       registry.registerTool(makeRegisteredTool(tool, execute));
     const prompt: (
       message: Prompt.Message,
+    ) => Effect.Effect<void, RuntimeError> = (message: Prompt.Message) =>
+      promptSemaphore.withPermit(runPrompt(message));
+    const runPrompt: (
+      message: Prompt.Message,
     ) => Effect.Effect<void, RuntimeError> = Effect.fnUntraced(
       function* (message) {
-        const snapshot = yield* Ref.get(entries);
         const run = Effect.gen(function* () {
           yield* getProvider(registry);
           const isFirstPrompt = yield* Ref.modify(sessionStarted, (started) => [
@@ -70,7 +75,6 @@ const makeRuntime: () => Effect.Effect<Runtime> = Effect.fnUntraced(
 
         return yield* Effect.tapError(run, (error) =>
           Effect.gen(function* () {
-            yield* Ref.set(entries, snapshot);
             yield* events.publish(RuntimeEvent.error(error));
           }),
         ).pipe(Effect.ensuring(events.publish(RuntimeEvent.idle())));

@@ -6,6 +6,7 @@ import {
   LoopLimitExceeded,
   MissingProvider,
   type ResponsePartError,
+  type ToolExecutionError,
 } from "./errors";
 import { RuntimeEvent } from "./events";
 import type { Registry } from "./registry";
@@ -17,7 +18,8 @@ type LoopError =
   | AiError.AiError
   | MissingProvider
   | ResponsePartError
-  | LoopLimitExceeded;
+  | LoopLimitExceeded
+  | ToolExecutionError;
 
 const maxLoopSteps = 32;
 

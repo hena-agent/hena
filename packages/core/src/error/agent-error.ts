@@ -2,6 +2,8 @@ import { Schema } from "effect";
 
 import { NonNegativeIntBase, ToolCallId, ToolName } from "../domain/primitives";
 
+// Tool errors are not nested in a tool-call part, so their payload uses
+// self-describing keys. `toolName` also preserves Error.name as the error tag.
 const ToolError = Schema.Struct({
   toolCallId: ToolCallId,
   toolName: ToolName,

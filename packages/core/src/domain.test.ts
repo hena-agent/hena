@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import { Schema } from "effect";
 
+import type { TimestampMillis, TokenCount } from "./index";
 import {
   CustomPart,
   FilePart,
@@ -8,11 +9,30 @@ import {
   Part,
   SessionId,
   TextPart,
+  ToolCallPart,
+  ToolResultPart,
   Usage,
 } from "./index";
 
+type TimestampMillisExtendsTokenCount = TimestampMillis extends TokenCount
+  ? true
+  : false;
+type TokenCountExtendsTimestampMillis = TokenCount extends TimestampMillis
+  ? true
+  : false;
+
+const numericBrandsAreDistinct: [
+  TimestampMillisExtendsTokenCount,
+  TokenCountExtendsTimestampMillis,
+] = [false, false];
+void numericBrandsAreDistinct;
+
 it("decodes branded ids", () => {
   assert.strictEqual(Schema.decodeUnknownSync(SessionId)("ses_123"), "ses_123");
+});
+
+it("rejects empty branded ids", () => {
+  assert.throws(() => Schema.decodeUnknownSync(SessionId)(""));
 });
 
 it("decodes known message parts", () => {
@@ -50,6 +70,29 @@ it("rejects custom message parts without the extension prefix", () => {
   );
 });
 
+it("rejects every canonical type as a custom message part", () => {
+  for (const type of [
+    "text",
+    "reasoning",
+    "file",
+    "tool-call",
+    "tool-result",
+  ] as const) {
+    assert.throws(() =>
+      Schema.decodeUnknownSync(CustomPart)({ type, data: {} }),
+    );
+  }
+});
+
+it("rejects non-json custom message part data", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(CustomPart)({
+      type: "x-test",
+      data: () => "nope",
+    }),
+  );
+});
+
 it("decodes file parts with string data", () => {
   assert.deepStrictEqual(
     Schema.decodeUnknownSync(FilePart)({
@@ -71,6 +114,29 @@ it("rejects non-file file part data", () => {
       type: "file",
       mediaType: "text/plain",
       data: 42,
+    }),
+  );
+});
+
+it("rejects non-json tool call input", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(ToolCallPart)({
+      type: "tool-call",
+      id: "call_123",
+      name: "read",
+      input: Symbol("not-json"),
+    }),
+  );
+});
+
+it("rejects non-json tool result output", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(ToolResultPart)({
+      type: "tool-result",
+      id: "call_123",
+      name: "read",
+      output: undefined,
+      isError: false,
     }),
   );
 });
@@ -120,14 +186,26 @@ it("rejects invalid message timestamps", () => {
   }
 });
 
-it("decodes usage reports", () => {
-  assert.deepStrictEqual(
-    Schema.decodeUnknownSync(Usage)({ inputTokens: 10, outputTokens: 4 }),
-    {
-      inputTokens: 10,
-      outputTokens: 4,
-    },
+it("rejects non-json message metadata", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(Message)({
+      id: "msg_123",
+      role: "user",
+      parts: [{ type: "text", text: "hello" }],
+      metadata: { fn: () => "nope" },
+      createdAt: 1,
+    }),
   );
+});
+
+it("decodes usage reports", () => {
+  const usage = Schema.decodeUnknownSync(Usage)({
+    inputTokens: 10,
+    outputTokens: 4,
+  });
+
+  assert.strictEqual(usage.inputTokens, 10);
+  assert.strictEqual(usage.outputTokens, 4);
 });
 
 it("rejects invalid usage token counts", () => {

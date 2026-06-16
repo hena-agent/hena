@@ -3,6 +3,7 @@ import { Effect } from "effect";
 export {
   CustomPart,
   FilePart,
+  JsonValue,
   Message,
   MessageId,
   Part,

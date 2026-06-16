@@ -6,7 +6,9 @@ const Branded = <Base extends Schema.Top, const Name extends string>(
 ): Schema.brand<Base["Rebuild"], Name> =>
   base.pipe(Schema.brand(name)).annotate({ identifier: name });
 
-const NonNegativeIntBase = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+export const NonNegativeIntBase = Schema.Int.check(
+  Schema.isGreaterThanOrEqualTo(0),
+);
 const isMediaType = Schema.isPattern(/^[^/\s]+\/[^/\s]+$/);
 
 export const JsonValue = Schema.Json.annotate({ identifier: "JsonValue" });

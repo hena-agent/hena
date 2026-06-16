@@ -1,42 +1,34 @@
 import { Schema } from "effect";
 
-import { ToolCallId, ToolName } from "../domain/primitives";
-
-const NonNegativeInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
-const MessageField: {
-  readonly message: typeof Schema.String;
-} = {
-  message: Schema.String,
-};
-const ToolErrorFields: {
-  readonly toolCallId: typeof ToolCallId;
-  readonly name: typeof ToolName;
-  readonly message: typeof Schema.String;
-} = {
-  toolCallId: ToolCallId,
-  name: ToolName,
-  ...MessageField,
-};
+import { NonNegativeIntBase, ToolCallId, ToolName } from "../domain/primitives";
 
 export class ProviderError extends Schema.TaggedErrorClass<ProviderError>()(
   "ProviderError",
-  MessageField,
+  { message: Schema.String },
 ) {}
 
 export class ToolDecodeError extends Schema.TaggedErrorClass<ToolDecodeError>()(
   "ToolDecodeError",
-  ToolErrorFields,
+  {
+    toolCallId: ToolCallId,
+    name: ToolName,
+    message: Schema.String,
+  },
 ) {}
 
 export class ToolExecutionError extends Schema.TaggedErrorClass<ToolExecutionError>()(
   "ToolExecutionError",
-  ToolErrorFields,
+  {
+    toolCallId: ToolCallId,
+    name: ToolName,
+    message: Schema.String,
+  },
 ) {}
 
 export class MaxStepsExceeded extends Schema.TaggedErrorClass<MaxStepsExceeded>()(
   "MaxStepsExceeded",
   {
-    maxSteps: NonNegativeInt,
+    maxSteps: NonNegativeIntBase,
   },
 ) {}
 

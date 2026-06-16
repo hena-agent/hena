@@ -3,28 +3,36 @@ import { Schema } from "effect";
 import { Usage } from "../domain/message";
 import { JsonValue } from "../domain/primitives";
 import { AgentError } from "../error/agent-error";
-import { EventBaseFields } from "./common";
+import { defineEvent } from "./common";
 
-export const UsageEvent = Schema.Struct({
-  ...EventBaseFields,
-  type: Schema.Literal("usage"),
+export const DiagnosticLevel = Schema.Literals([
+  "debug",
+  "info",
+  "warn",
+  "error",
+]).annotate({ identifier: "DiagnosticLevel" });
+export type DiagnosticLevel = Schema.Schema.Type<typeof DiagnosticLevel>;
+
+export const UsageEvent = defineEvent("usage", {
   usage: Usage,
-}).annotate({ identifier: "UsageEvent" });
+});
 export type UsageEvent = Schema.Schema.Type<typeof UsageEvent>;
 
-export const DiagnosticEvent = Schema.Struct({
-  ...EventBaseFields,
-  type: Schema.Literal("diagnostic"),
-  level: Schema.NonEmptyString,
+export const DiagnosticEvent = defineEvent("diagnostic", {
+  level: DiagnosticLevel,
   extension: Schema.NonEmptyString,
   message: Schema.String,
   cause: Schema.optionalKey(JsonValue),
-}).annotate({ identifier: "DiagnosticEvent" });
+});
 export type DiagnosticEvent = Schema.Schema.Type<typeof DiagnosticEvent>;
 
-export const ErrorEvent = Schema.Struct({
-  ...EventBaseFields,
-  type: Schema.Literal("error"),
+export const ErrorEvent = defineEvent("error", {
   error: AgentError,
-}).annotate({ identifier: "ErrorEvent" });
+});
 export type ErrorEvent = Schema.Schema.Type<typeof ErrorEvent>;
+
+export const TerminalEvents = [
+  UsageEvent,
+  DiagnosticEvent,
+  ErrorEvent,
+] as const;

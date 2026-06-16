@@ -1,9 +1,12 @@
 import { assert, it } from "@effect/vitest";
-import { Schema } from "effect";
+import { Schema, SchemaAST } from "effect";
 
 import type { AgentEvent as AgentEventType } from "./index";
 import {
   AgentEvent,
+  AgentEventSchemas,
+  DiagnosticEvent,
+  DiagnosticLevel,
   ErrorEvent,
   EventSeq,
   MessageEndEvent,
@@ -11,37 +14,11 @@ import {
   RunEndEvent,
   RunStartEvent,
   ToolExecutionDeltaEvent,
+  ToolInputEndEvent,
   ToolResultEvent,
 } from "./index";
 
 type AgentEventKind = AgentEventType["type"];
-
-const allEventKinds: ReadonlyArray<AgentEventKind> = [
-  "run-start",
-  "run-end",
-  "turn-start",
-  "turn-end",
-  "message-start",
-  "message-end",
-  "text-start",
-  "text-delta",
-  "text-end",
-  "reasoning-start",
-  "reasoning-delta",
-  "reasoning-end",
-  "tool-input-start",
-  "tool-input-delta",
-  "tool-input-end",
-  "tool-call",
-  "tool-execution-start",
-  "tool-execution-delta",
-  "tool-execution-end",
-  "tool-result",
-  "usage",
-  "diagnostic",
-  "error",
-];
-void allEventKinds;
 
 const baseEvent = {
   runId: "run_123",
@@ -49,9 +26,161 @@ const baseEvent = {
   seq: 0,
 };
 
+const agentEventFixtures: Record<AgentEventKind, unknown> = {
+  "run-start": { ...baseEvent, type: "run-start", parentRunId: "run_parent" },
+  "run-end": { ...baseEvent, type: "run-end", reason: "max-steps" },
+  "turn-start": { ...baseEvent, type: "turn-start", step: 0 },
+  "turn-end": { ...baseEvent, type: "turn-end", step: 0 },
+  "message-start": {
+    ...baseEvent,
+    type: "message-start",
+    messageId: "msg_123",
+    role: "assistant",
+  },
+  "message-end": {
+    ...baseEvent,
+    type: "message-end",
+    message: {
+      id: "msg_123",
+      role: "assistant",
+      parts: [{ type: "text", text: "hello" }],
+      createdAt: 1,
+    },
+  },
+  "text-start": {
+    ...baseEvent,
+    type: "text-start",
+    messageId: "msg_123",
+    partId: "part_1",
+  },
+  "text-delta": {
+    ...baseEvent,
+    type: "text-delta",
+    messageId: "msg_123",
+    partId: "part_1",
+    delta: "hello",
+  },
+  "text-end": {
+    ...baseEvent,
+    type: "text-end",
+    messageId: "msg_123",
+    partId: "part_1",
+  },
+  "reasoning-start": {
+    ...baseEvent,
+    type: "reasoning-start",
+    messageId: "msg_123",
+    partId: "part_2",
+  },
+  "reasoning-delta": {
+    ...baseEvent,
+    type: "reasoning-delta",
+    messageId: "msg_123",
+    partId: "part_2",
+    delta: "thinking",
+  },
+  "reasoning-end": {
+    ...baseEvent,
+    type: "reasoning-end",
+    messageId: "msg_123",
+    partId: "part_2",
+  },
+  "tool-input-start": {
+    ...baseEvent,
+    type: "tool-input-start",
+    toolCallId: "call_123",
+    name: "read",
+  },
+  "tool-input-delta": {
+    ...baseEvent,
+    type: "tool-input-delta",
+    toolCallId: "call_123",
+    delta: '{"filePath":',
+  },
+  "tool-input-end": {
+    ...baseEvent,
+    type: "tool-input-end",
+    toolCallId: "call_123",
+  },
+  "tool-call": {
+    ...baseEvent,
+    type: "tool-call",
+    toolCallId: "call_123",
+    name: "read",
+    input: { filePath: "README.md" },
+  },
+  "tool-execution-start": {
+    ...baseEvent,
+    type: "tool-execution-start",
+    toolCallId: "call_123",
+  },
+  "tool-execution-delta": {
+    ...baseEvent,
+    type: "tool-execution-delta",
+    toolCallId: "call_123",
+    chunk: { bytesRead: 10 },
+  },
+  "tool-execution-end": {
+    ...baseEvent,
+    type: "tool-execution-end",
+    toolCallId: "call_123",
+  },
+  "tool-result": {
+    ...baseEvent,
+    type: "tool-result",
+    toolCallId: "call_123",
+    output: { text: "file contents" },
+    isError: false,
+  },
+  usage: {
+    ...baseEvent,
+    type: "usage",
+    usage: { inputTokens: 10, outputTokens: 4 },
+  },
+  diagnostic: {
+    ...baseEvent,
+    type: "diagnostic",
+    level: "warn",
+    extension: "ext-test",
+    message: "hook failed",
+    cause: { detail: "boom" },
+  },
+  error: {
+    ...baseEvent,
+    type: "error",
+    error: { _tag: "ProviderError", message: "model failed" },
+  },
+};
+
+const assertAgentEventRoundTrip = (event: unknown): void => {
+  assert.deepStrictEqual(
+    Schema.encodeUnknownSync(AgentEvent)(
+      Schema.decodeUnknownSync(AgentEvent)(event),
+    ),
+    event,
+  );
+};
+
 it("decodes event sequence and part identifiers", () => {
   assert.strictEqual(Schema.decodeUnknownSync(EventSeq)(0), 0);
   assert.strictEqual(Schema.decodeUnknownSync(PartId)("part_123"), "part_123");
+});
+
+it("round-trips every registered event fixture", () => {
+  const fixtures = Object.values(agentEventFixtures);
+
+  assert.strictEqual(fixtures.length, AgentEventSchemas.length);
+
+  for (const event of fixtures) {
+    assertAgentEventRoundTrip(event);
+  }
+});
+
+it("derives PascalCase schema identifiers from event types", () => {
+  assert.strictEqual(
+    SchemaAST.resolveIdentifier(ToolInputEndEvent.ast),
+    ["Tool", "Input", "End", "Event"].join(""),
+  );
 });
 
 it("rejects invalid event sequence and part identifiers", () => {
@@ -97,10 +226,7 @@ it("decodes run lifecycle events", () => {
     { ...baseEvent, type: "turn-start", step: 0 },
     { ...baseEvent, type: "turn-end", step: 0 },
   ] as const) {
-    assert.strictEqual(
-      Schema.decodeUnknownSync(AgentEvent)(event).type,
-      event.type,
-    );
+    assertAgentEventRoundTrip(event);
   }
 });
 
@@ -209,10 +335,7 @@ it("decodes text and reasoning stream events", () => {
       partId: "part_2",
     },
   ] as const) {
-    assert.strictEqual(
-      Schema.decodeUnknownSync(AgentEvent)(event).type,
-      event.type,
-    );
+    assertAgentEventRoundTrip(event);
   }
 });
 
@@ -247,10 +370,7 @@ it("decodes tool stream and execution events", () => {
     },
     { ...baseEvent, type: "tool-execution-end", toolCallId: "call_123" },
   ] as const) {
-    assert.strictEqual(
-      Schema.decodeUnknownSync(AgentEvent)(event).type,
-      event.type,
-    );
+    assertAgentEventRoundTrip(event);
   }
 });
 
@@ -340,6 +460,24 @@ it("decodes usage, diagnostic, and error events", () => {
   });
 
   assert.strictEqual(errorEvent.error._tag, "ProviderError");
+});
+
+it("rejects unknown diagnostic levels", () => {
+  assert.strictEqual(
+    Schema.decodeUnknownSync(DiagnosticLevel)("error"),
+    "error",
+  );
+
+  assert.throws(() => Schema.decodeUnknownSync(DiagnosticLevel)("banana"));
+  assert.throws(() =>
+    Schema.decodeUnknownSync(DiagnosticEvent)({
+      ...baseEvent,
+      type: "diagnostic",
+      level: "banana",
+      extension: "ext-test",
+      message: "hook failed",
+    }),
+  );
 });
 
 it("rejects malformed event envelopes", () => {

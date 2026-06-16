@@ -2,61 +2,52 @@ import { Schema } from "effect";
 
 import { Message } from "../domain/message";
 import { MessageId } from "../domain/primitives";
-import { EventBaseFields, TextStreamFields } from "./common";
+import { defineEvent, defineTextStreamEvent } from "./common";
 
-export const MessageStartEvent = Schema.Struct({
-  ...EventBaseFields,
-  type: Schema.Literal("message-start"),
+export const MessageStartEvent = defineEvent("message-start", {
   messageId: MessageId,
   role: Schema.Literal("assistant"),
-}).annotate({ identifier: "MessageStartEvent" });
+});
 export type MessageStartEvent = Schema.Schema.Type<typeof MessageStartEvent>;
 
-export const MessageEndEvent = Schema.Struct({
-  ...EventBaseFields,
-  type: Schema.Literal("message-end"),
+export const MessageEndEvent = defineEvent("message-end", {
   message: Message,
-}).annotate({ identifier: "MessageEndEvent" });
+});
 export type MessageEndEvent = Schema.Schema.Type<typeof MessageEndEvent>;
 
-export const TextStartEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("text-start"),
-}).annotate({ identifier: "TextStartEvent" });
+export const TextStartEvent = defineTextStreamEvent("text-start", {});
 export type TextStartEvent = Schema.Schema.Type<typeof TextStartEvent>;
 
-export const TextDeltaEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("text-delta"),
+export const TextDeltaEvent = defineTextStreamEvent("text-delta", {
   delta: Schema.String,
-}).annotate({ identifier: "TextDeltaEvent" });
+});
 export type TextDeltaEvent = Schema.Schema.Type<typeof TextDeltaEvent>;
 
-export const TextEndEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("text-end"),
-}).annotate({ identifier: "TextEndEvent" });
+export const TextEndEvent = defineTextStreamEvent("text-end", {});
 export type TextEndEvent = Schema.Schema.Type<typeof TextEndEvent>;
 
-export const ReasoningStartEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("reasoning-start"),
-}).annotate({ identifier: "ReasoningStartEvent" });
+export const ReasoningStartEvent = defineTextStreamEvent("reasoning-start", {});
 export type ReasoningStartEvent = Schema.Schema.Type<
   typeof ReasoningStartEvent
 >;
 
-export const ReasoningDeltaEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("reasoning-delta"),
+export const ReasoningDeltaEvent = defineTextStreamEvent("reasoning-delta", {
   delta: Schema.String,
-}).annotate({ identifier: "ReasoningDeltaEvent" });
+});
 export type ReasoningDeltaEvent = Schema.Schema.Type<
   typeof ReasoningDeltaEvent
 >;
 
-export const ReasoningEndEvent = Schema.Struct({
-  ...TextStreamFields,
-  type: Schema.Literal("reasoning-end"),
-}).annotate({ identifier: "ReasoningEndEvent" });
+export const ReasoningEndEvent = defineTextStreamEvent("reasoning-end", {});
 export type ReasoningEndEvent = Schema.Schema.Type<typeof ReasoningEndEvent>;
+
+export const MessageEvents = [
+  MessageStartEvent,
+  MessageEndEvent,
+  TextStartEvent,
+  TextDeltaEvent,
+  TextEndEvent,
+  ReasoningStartEvent,
+  ReasoningDeltaEvent,
+  ReasoningEndEvent,
+] as const;

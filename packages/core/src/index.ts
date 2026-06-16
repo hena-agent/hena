@@ -7,3 +7,14 @@
  */
 
 export { MessageId, PartId, RunId, SessionId, ToolCallId } from "./domain/id";
+export { Message, MessageRole } from "./domain/message";
+export {
+  CustomPart,
+  FilePart,
+  Part,
+  ReasoningPart,
+  TextPart,
+  ToolCallPart,
+  ToolResultPart,
+} from "./domain/part";
+export { Usage } from "./domain/usage";

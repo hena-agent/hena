@@ -127,12 +127,45 @@ it("decodes file parts with string data", () => {
   );
 });
 
+it("rejects invalid file part media types", () => {
+  for (const mediaType of ["", "not-a-mime"]) {
+    assert.throws(() =>
+      Schema.decodeUnknownSync(FilePart)({
+        type: "file",
+        mediaType,
+        data: "hello",
+      }),
+    );
+  }
+});
+
 it("rejects non-file file part data", () => {
   assert.throws(() =>
     Schema.decodeUnknownSync(FilePart)({
       type: "file",
       mediaType: "text/plain",
       data: 42,
+    }),
+  );
+});
+
+it("rejects empty tool part names", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(ToolCallPart)({
+      type: "tool-call",
+      id: "call_123",
+      name: "",
+      input: {},
+    }),
+  );
+
+  assert.throws(() =>
+    Schema.decodeUnknownSync(ToolResultPart)({
+      type: "tool-result",
+      id: "call_123",
+      name: "",
+      output: {},
+      isError: false,
     }),
   );
 });

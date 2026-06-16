@@ -15,6 +15,7 @@ export {
   TokenCount,
   ToolCallId,
   ToolCallPart,
+  ToolName,
   ToolResultPart,
   Usage,
 } from "./domain";

@@ -7,6 +7,7 @@ const Branded = <Base extends Schema.Top, const Name extends string>(
   base.pipe(Schema.brand(name)).annotate({ identifier: name });
 
 const NonNegativeIntBase = Schema.Int.check(Schema.isGreaterThanOrEqualTo(0));
+const isMediaType = Schema.isPattern(/^[^/\s]+\/[^/\s]+$/);
 export const JsonValue = Schema.Json.annotate({ identifier: "JsonValue" });
 export type JsonValue = Schema.Schema.Type<typeof JsonValue>;
 export const TimestampMillis = Branded(NonNegativeIntBase, "TimestampMillis");
@@ -24,6 +25,9 @@ export type MessageId = Schema.Schema.Type<typeof MessageId>;
 export const ToolCallId = Branded(Schema.NonEmptyString, "ToolCallId");
 export type ToolCallId = Schema.Schema.Type<typeof ToolCallId>;
 
+export const ToolName = Branded(Schema.NonEmptyString, "ToolName");
+export type ToolName = Schema.Schema.Type<typeof ToolName>;
+
 export const TextPart = Schema.Struct({
   type: Schema.Literal("text"),
   text: Schema.String,
@@ -38,7 +42,7 @@ export type ReasoningPart = Schema.Schema.Type<typeof ReasoningPart>;
 
 export const FilePart = Schema.Struct({
   type: Schema.Literal("file"),
-  mediaType: Schema.String,
+  mediaType: Schema.String.check(isMediaType),
   data: Schema.String,
 }).annotate({ identifier: "FilePart" });
 export type FilePart = Schema.Schema.Type<typeof FilePart>;
@@ -46,7 +50,7 @@ export type FilePart = Schema.Schema.Type<typeof FilePart>;
 export const ToolCallPart = Schema.Struct({
   type: Schema.Literal("tool-call"),
   id: ToolCallId,
-  name: Schema.String,
+  name: ToolName,
   input: JsonValue,
 }).annotate({ identifier: "ToolCallPart" });
 export type ToolCallPart = Schema.Schema.Type<typeof ToolCallPart>;
@@ -54,7 +58,7 @@ export type ToolCallPart = Schema.Schema.Type<typeof ToolCallPart>;
 export const ToolResultPart = Schema.Struct({
   type: Schema.Literal("tool-result"),
   id: ToolCallId,
-  name: Schema.String,
+  name: ToolName,
   output: JsonValue,
   isError: Schema.Boolean,
 }).annotate({ identifier: "ToolResultPart" });

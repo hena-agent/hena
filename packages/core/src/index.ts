@@ -3,7 +3,7 @@ import { Effect } from "effect";
 export {
   Message,
   Usage,
-} from "./message";
+} from "./domain/message";
 
 export {
   CustomPart,
@@ -13,7 +13,7 @@ export {
   TextPart,
   ToolCallPart,
   ToolResultPart,
-} from "./parts";
+} from "./domain/parts";
 
 export {
   JsonValue,
@@ -25,7 +25,7 @@ export {
   TokenCount,
   ToolCallId,
   ToolName,
-} from "./primitives";
+} from "./domain/primitives";
 
 export const corePackageName = "@hena-dev/core";
 

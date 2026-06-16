@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 export {
+  AssistantMessage,
   Message,
   Usage,
 } from "./domain/message";

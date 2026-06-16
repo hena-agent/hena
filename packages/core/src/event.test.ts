@@ -5,6 +5,7 @@ import { AgentEventSchemas } from "./event/agent-event";
 import type { AgentEvent as AgentEventType } from "./index";
 import {
   AgentEvent,
+  AssistantMessage,
   DiagnosticEvent,
   DiagnosticLevel,
   ErrorEvent,
@@ -224,6 +225,10 @@ it("decodes nested message-end messages", () => {
   );
 
   assert.strictEqual(messageEnd.message.parts[0]?.type, "text");
+  assert.strictEqual(
+    Schema.decodeUnknownSync(AssistantMessage)(messageEnd.message).role,
+    "assistant",
+  );
 });
 
 it("rejects non-assistant message start events", () => {

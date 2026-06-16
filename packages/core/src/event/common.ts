@@ -18,13 +18,13 @@ const structFields = <const Fields extends Schema.Struct.Fields>(
   fields: Fields,
 ): Fields => fields;
 
-export const EventBaseFields = structFields({
+const EventBaseFields = structFields({
   runId: RunId,
   sessionId: SessionId,
   seq: EventSeq,
 });
 
-export const TextStreamFields = structFields({
+const TextStreamFields = structFields({
   ...EventBaseFields,
   messageId: MessageId,
   partId: PartId,

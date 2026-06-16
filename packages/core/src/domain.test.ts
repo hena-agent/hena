@@ -217,6 +217,18 @@ it("rejects non-json message metadata", () => {
   );
 });
 
+it("rejects explicit undefined message metadata", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(Message)({
+      id: "msg_123",
+      role: "user",
+      parts: [{ type: "text", text: "hello" }],
+      metadata: undefined,
+      createdAt: 1,
+    }),
+  );
+});
+
 it("decodes usage reports", () => {
   const usage = Schema.decodeUnknownSync(Usage)({
     inputTokens: 10,
@@ -231,4 +243,10 @@ it("rejects invalid usage token counts", () => {
   for (const inputTokens of [-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
     assert.throws(() => Schema.decodeUnknownSync(Usage)({ inputTokens }));
   }
+});
+
+it("rejects explicit undefined usage token counts", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(Usage)({ inputTokens: undefined }),
+  );
 });

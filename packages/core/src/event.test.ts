@@ -11,12 +11,27 @@ import {
   ErrorEvent,
   EventSeq,
   MessageEndEvent,
+  MessageStartEvent,
   PartId,
+  ReasoningDeltaEvent,
+  ReasoningEndEvent,
+  ReasoningStartEvent,
   RunEndEvent,
   RunStartEvent,
+  TextDeltaEvent,
+  TextEndEvent,
+  TextStartEvent,
+  ToolCallEvent,
   ToolExecutionDeltaEvent,
+  ToolExecutionEndEvent,
+  ToolExecutionStartEvent,
+  ToolInputDeltaEvent,
   ToolInputEndEvent,
+  ToolInputStartEvent,
   ToolResultEvent,
+  TurnEndEvent,
+  TurnStartEvent,
+  UsageEvent,
 } from "./index";
 
 type AgentEventKind = AgentEventType["type"];
@@ -162,6 +177,32 @@ const assertAgentEventRoundTrip = (event: unknown): void => {
   );
 };
 
+const publicAgentEventSchemas: ReadonlyArray<unknown> = [
+  RunStartEvent,
+  RunEndEvent,
+  TurnStartEvent,
+  TurnEndEvent,
+  MessageStartEvent,
+  MessageEndEvent,
+  TextStartEvent,
+  TextDeltaEvent,
+  TextEndEvent,
+  ReasoningStartEvent,
+  ReasoningDeltaEvent,
+  ReasoningEndEvent,
+  ToolInputStartEvent,
+  ToolInputDeltaEvent,
+  ToolInputEndEvent,
+  ToolCallEvent,
+  ToolExecutionStartEvent,
+  ToolExecutionDeltaEvent,
+  ToolExecutionEndEvent,
+  ToolResultEvent,
+  UsageEvent,
+  DiagnosticEvent,
+  ErrorEvent,
+];
+
 it("decodes event sequence and part identifiers", () => {
   assert.strictEqual(Schema.decodeUnknownSync(EventSeq)(0), 0);
   assert.strictEqual(Schema.decodeUnknownSync(PartId)("part_123"), "part_123");
@@ -175,6 +216,16 @@ it("round-trips every registered event fixture", () => {
   for (const [type, event] of fixtures) {
     assert.strictEqual(Schema.decodeUnknownSync(AgentEvent)(event).type, type);
     assertAgentEventRoundTrip(event);
+  }
+});
+
+it("exports every agent event schema from the package root", () => {
+  const registeredSchemas: ReadonlySet<unknown> = new Set(AgentEventSchemas);
+
+  assert.strictEqual(publicAgentEventSchemas.length, AgentEventSchemas.length);
+
+  for (const schema of publicAgentEventSchemas) {
+    assert.ok(registeredSchemas.has(schema));
   }
 });
 

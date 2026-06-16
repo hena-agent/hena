@@ -27,6 +27,14 @@ export {
   ToolName,
 } from "./domain/primitives";
 
+export {
+  AgentError,
+  MaxStepsExceeded,
+  ProviderError,
+  ToolDecodeError,
+  ToolExecutionError,
+} from "./error/agent-error";
+
 export const corePackageName = "@hena-dev/core";
 
 export const corePackageNameEffect = Effect.succeed(corePackageName);

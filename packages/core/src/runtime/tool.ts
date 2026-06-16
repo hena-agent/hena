@@ -38,15 +38,11 @@ export const makeRegisteredTool = <
   tool: RuntimeTool<Name, Parameters, Success>,
   execute: ToolHandler<Parameters, Success, E>,
 ): RegisteredTool => {
-  const decode = Schema.decodeUnknownSync(tool.parametersSchema);
+  const decode = Schema.decodeUnknownEffect(tool.parametersSchema);
 
   return {
     name: tool.name,
     tool,
-    execute: (params: unknown) =>
-      Effect.try({
-        try: () => decode(params),
-        catch: (error: unknown) => error,
-      }).pipe(Effect.flatMap(execute)),
+    execute: (params: unknown) => decode(params).pipe(Effect.flatMap(execute)),
   };
 };

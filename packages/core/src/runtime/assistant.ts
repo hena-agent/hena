@@ -1,44 +1,60 @@
-import { Prompt, type Response, type Tool } from "effect/unstable/ai";
+import { Effect } from "effect";
+import { Prompt, type Response } from "effect/unstable/ai";
+
+import { appendAssistantPart } from "./assistant-parts";
+import { ResponsePartError } from "./errors";
 
 export interface AssistantResult {
   readonly message: Prompt.AssistantMessage;
   readonly toolCalls: ReadonlyArray<Prompt.ToolCallPart>;
 }
 
-type StreamPart = Response.StreamPart<Record<string, Tool.Any>>;
+export type StreamPart =
+  | Response.TextStartPart
+  | Response.TextDeltaPart
+  | Response.TextEndPart
+  | Response.ReasoningStartPart
+  | Response.ReasoningDeltaPart
+  | Response.ReasoningEndPart
+  | Response.ToolParamsStartPart
+  | Response.ToolParamsDeltaPart
+  | Response.ToolParamsEndPart
+  | Response.ToolCallPart<string, unknown>
+  | Response.ToolResultPart<string, unknown, unknown>
+  | Response.ToolApprovalRequestPart
+  | Response.FilePart
+  | Response.DocumentSourcePart
+  | Response.UrlSourcePart
+  | Response.ResponseMetadataPart
+  | Response.FinishPart
+  | Response.ErrorPart;
 
-const appendPart = (
-  content: ReadonlyArray<Prompt.AssistantMessagePart>,
+export interface AssistantState {
+  readonly content: Array<Prompt.AssistantMessagePart>;
+  readonly toolCalls: Array<Prompt.ToolCallPart>;
+  readonly text: Map<string, string>;
+  readonly reasoning: Map<string, string>;
+}
+
+export const makeAssistantState = (): AssistantState => ({
+  content: [],
+  toolCalls: [],
+  text: new Map(),
+  reasoning: new Map(),
+});
+
+export const applyAssistantPart = (
+  state: AssistantState,
   part: StreamPart,
-): ReadonlyArray<Prompt.AssistantMessagePart> => {
-  if (part.type === "text-delta") {
-    return [...content, Prompt.textPart({ text: part.delta })];
+): Effect.Effect<AssistantState, ResponsePartError> => {
+  if (part.type === "error") {
+    return Effect.fail(new ResponsePartError({ error: part.error }));
   }
-  if (part.type === "tool-call") {
-    return [
-      ...content,
-      Prompt.toolCallPart({
-        id: part.id,
-        name: part.name,
-        params: part.params,
-        providerExecuted: part.providerExecuted,
-      }),
-    ];
-  }
-  return content;
+  appendAssistantPart(state, part);
+  return Effect.succeed(state);
 };
 
-const isToolCall = (
-  part: Prompt.AssistantMessagePart,
-): part is Prompt.ToolCallPart => part.type === "tool-call";
-
-export const collectAssistant = (
-  parts: ReadonlyArray<StreamPart>,
-): AssistantResult => {
-  const content = parts.reduce(appendPart, []);
-
-  return {
-    message: Prompt.assistantMessage({ content }),
-    toolCalls: content.filter(isToolCall),
-  };
-};
+export const finishAssistant = (state: AssistantState): AssistantResult => ({
+  message: Prompt.assistantMessage({ content: [...state.content] }),
+  toolCalls: [...state.toolCalls],
+});

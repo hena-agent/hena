@@ -1,34 +1,49 @@
-import { Effect, type Ref } from "effect";
+import { Effect } from "effect";
 import { Prompt } from "effect/unstable/ai";
 
-import type { Entry } from "./entry";
-import type { EventLog } from "./events";
-import type { Registry } from "./registry";
+import type { RuntimeContext } from "./context";
+import { RuntimeEvent } from "./events";
 import type { RegisteredTool } from "./tool";
 import { appendEntry } from "./transcript";
 
-interface ToolContext {
-  readonly entries: Ref.Ref<ReadonlyArray<Entry>>;
-  readonly events: EventLog;
-  readonly registry: Registry;
-}
+export const runTools: (
+  context: RuntimeContext,
+  calls: ReadonlyArray<Prompt.ToolCallPart>,
+) => Effect.Effect<void> = Effect.fnUntraced(function* (context, calls) {
+  if (calls.length === 0) {
+    return;
+  }
 
-export const runTool = (
-  context: ToolContext,
-  call: Prompt.ToolCallPart,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    yield* context.events.publish({
-      type: "tool_start",
-      entry: callMessage(call),
-    });
-    const tool = yield* context.registry.tool(call.name);
-    const part = yield* toolResult(tool, call);
-    const message = Prompt.toolMessage({ content: [part] });
-
-    yield* appendEntry(context.entries, message);
-    yield* context.events.publish({ type: "tool_end", entry: message });
+  yield* Effect.forEach(
+    calls,
+    (call) => context.events.publish(RuntimeEvent.toolStart(callMessage(call))),
+    { discard: true },
+  );
+  const parts = yield* Effect.forEach(calls, (call) => runTool(context, call), {
+    concurrency: "unbounded",
   });
+  const message = Prompt.toolMessage({ content: parts });
+
+  yield* appendEntry(context.entries, message);
+  yield* Effect.forEach(
+    parts,
+    (part) =>
+      context.events.publish(
+        RuntimeEvent.toolEnd(Prompt.toolMessage({ content: [part] })),
+      ),
+    { discard: true },
+  );
+});
+
+const runTool: (
+  context: RuntimeContext,
+  call: Prompt.ToolCallPart,
+) => Effect.Effect<Prompt.ToolResultPart> = Effect.fnUntraced(
+  function* (context, call) {
+    const tool = yield* context.registry.tool(call.name);
+    return yield* toolResult(tool, call);
+  },
+);
 
 const toolResult = (
   tool: RegisteredTool | undefined,

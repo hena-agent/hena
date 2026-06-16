@@ -1,19 +1,15 @@
-import { Effect, Ref } from "effect";
+import { Effect, Option, Ref } from "effect";
 import type { LanguageModel } from "effect/unstable/ai";
 
 import type { RegisteredTool } from "./tool";
 
-type ProviderSlot =
-  | { readonly _tag: "Empty" }
-  | { readonly _tag: "Full"; readonly provider: LanguageModel.Service };
-
 interface RegistryState {
-  readonly provider: ProviderSlot;
+  readonly provider: Option.Option<LanguageModel.Service>;
   readonly tools: ReadonlyMap<string, RegisteredTool>;
 }
 
 export interface Registry {
-  readonly provider: () => Effect.Effect<ProviderSlot>;
+  readonly provider: () => Effect.Effect<Option.Option<LanguageModel.Service>>;
   readonly registerProvider: (
     provider: LanguageModel.Service,
   ) => Effect.Effect<void>;
@@ -23,7 +19,7 @@ export interface Registry {
 }
 
 const emptyState: RegistryState = {
-  provider: { _tag: "Empty" },
+  provider: Option.none(),
   tools: new Map(),
 };
 
@@ -35,7 +31,7 @@ export const makeRegistry: Effect.Effect<Registry> = Effect.gen(function* () {
     registerProvider: (provider: LanguageModel.Service) =>
       Ref.update(state, (value) => ({
         ...value,
-        provider: { _tag: "Full" as const, provider },
+        provider: Option.some(provider),
       })),
     registerTool: (tool: RegisteredTool) =>
       Ref.update(state, (value) => ({

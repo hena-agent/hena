@@ -1,52 +1,42 @@
 import { Effect, Ref, Stream } from "effect";
+import { type AiError, type LanguageModel, Toolkit } from "effect/unstable/ai";
+
 import {
-  type AiError,
-  type LanguageModel,
-  type Prompt,
-  type Response,
-  type Tool,
-  Toolkit,
-} from "effect/unstable/ai";
+  type AssistantResult,
+  applyAssistantPart,
+  finishAssistant,
+  makeAssistantState,
+} from "./assistant";
+import type { RuntimeContext } from "./context";
+import type { ResponsePartError } from "./errors";
+import { RuntimeEvent } from "./events";
 
-import type { Entry } from "./entry";
-import type { EventLog } from "./events";
-import type { Registry } from "./registry";
-
-interface StreamContext {
-  readonly entries: Ref.Ref<ReadonlyArray<Entry>>;
-  readonly events: EventLog;
-  readonly registry: Registry;
-}
-
-export const streamAssistant = (
-  context: StreamContext,
+export const streamAssistant: (
+  context: RuntimeContext,
   provider: LanguageModel.Service,
   step: number,
-): Effect.Effect<
-  ReadonlyArray<Response.StreamPart<Record<string, Tool.Any>>>,
-  AiError.AiError
-> =>
-  Effect.gen(function* () {
-    yield* context.events.publish({ type: "turn_start", step });
-    yield* context.events.publish({ type: "message_start", step });
+) => Effect.Effect<AssistantResult, AiError.AiError | ResponsePartError> =
+  Effect.fnUntraced(function* (context, provider, step) {
+    yield* context.events.publish(RuntimeEvent.turnStart(step));
+    yield* context.events.publish(RuntimeEvent.messageStart(step));
 
     const entries = yield* Ref.get(context.entries);
     const tools = yield* context.registry.tools();
     const toolkit = Toolkit.make(...tools.map((tool) => tool.tool));
     const stream = provider.streamText({
-      prompt: entries.filter(isPromptMessage),
+      prompt: entries,
       toolkit,
       disableToolCallResolution: true,
     });
-    const parts = Array.from(yield* Stream.runCollect(stream));
-
-    yield* Effect.forEach(
-      parts,
-      (part) => context.events.publish({ type: "message_delta", part, step }),
-      { discard: true },
+    const assistant = yield* Stream.runFoldEffect(
+      stream,
+      makeAssistantState,
+      (current, part) =>
+        Effect.gen(function* () {
+          yield* context.events.publish(RuntimeEvent.messageDelta(part, step));
+          return yield* applyAssistantPart(current, part);
+        }),
     );
-    return parts;
-  });
 
-const isPromptMessage = (entry: Entry): entry is Prompt.Message =>
-  "role" in entry;
+    return finishAssistant(assistant);
+  });

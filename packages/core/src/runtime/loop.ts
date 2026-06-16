@@ -1,68 +1,67 @@
-import { Effect, type Ref } from "effect";
+import { Effect, Option } from "effect";
 import type { AiError, LanguageModel, Prompt } from "effect/unstable/ai";
 
-import { collectAssistant } from "./assistant";
-import type { Entry } from "./entry";
-import { MissingProvider } from "./errors";
-import type { EventLog } from "./events";
+import type { RuntimeContext } from "./context";
+import {
+  LoopLimitExceeded,
+  MissingProvider,
+  type ResponsePartError,
+} from "./errors";
+import { RuntimeEvent } from "./events";
 import type { Registry } from "./registry";
 import { streamAssistant } from "./stream";
-import { runTool } from "./tool-runner";
+import { runTools } from "./tool-runner";
 import { appendEntry } from "./transcript";
 
-interface LoopContext {
-  readonly entries: Ref.Ref<ReadonlyArray<Entry>>;
-  readonly events: EventLog;
-  readonly registry: Registry;
-}
+type LoopError =
+  | AiError.AiError
+  | MissingProvider
+  | ResponsePartError
+  | LoopLimitExceeded;
 
-export const runLoop = (
-  context: LoopContext,
+const maxLoopSteps = 32;
+
+export const runLoop: (
+  context: RuntimeContext,
   step: number,
-): Effect.Effect<void, AiError.AiError | MissingProvider> =>
-  Effect.gen(function* () {
+) => Effect.Effect<void, LoopError> = Effect.fnUntraced(
+  function* (context, step) {
+    if (step > maxLoopSteps) {
+      return yield* new LoopLimitExceeded({ maxSteps: maxLoopSteps });
+    }
     const toolCalls = yield* runTurn(context, step);
     if (toolCalls.length === 0) {
       return;
     }
     return yield* runLoop(context, step + 1);
-  });
+  },
+);
 
-const runTurn = (
-  context: LoopContext,
+const runTurn: (
+  context: RuntimeContext,
   step: number,
-): Effect.Effect<
-  ReadonlyArray<Prompt.ToolCallPart>,
-  AiError.AiError | MissingProvider
-> =>
-  Effect.gen(function* () {
+) => Effect.Effect<ReadonlyArray<Prompt.ToolCallPart>, LoopError> =
+  Effect.fnUntraced(function* (context, step) {
     const provider = yield* getProvider(context.registry);
-    const parts = yield* streamAssistant(context, provider, step);
-    const result = collectAssistant(parts);
+    const result = yield* streamAssistant(context, provider, step);
 
     yield* appendEntry(context.entries, result.message);
-    yield* context.events.publish({
-      type: "message_end",
-      entry: result.message,
-    });
-    yield* Effect.forEach(result.toolCalls, (call) => runTool(context, call), {
-      concurrency: "unbounded",
-      discard: true,
-    });
-    yield* context.events.publish({
-      type: "turn_end",
-      step,
-    });
+    yield* context.events.publish(
+      RuntimeEvent.messageEnd(result.message, step),
+    );
+    yield* runTools(context, result.toolCalls);
+    yield* context.events.publish(RuntimeEvent.turnEnd(step));
     return result.toolCalls;
   });
 
-const getProvider = (
+export const getProvider: (
   registry: Registry,
-): Effect.Effect<LanguageModel.Service, MissingProvider> =>
-  Effect.gen(function* () {
+) => Effect.Effect<LanguageModel.Service, MissingProvider> = Effect.fnUntraced(
+  function* (registry) {
     const provider = yield* registry.provider();
-    if (provider._tag === "Empty") {
+    if (Option.isNone(provider)) {
       return yield* new MissingProvider();
     }
-    return provider.provider;
-  });
+    return provider.value;
+  },
+);

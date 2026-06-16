@@ -30,10 +30,20 @@ export class MaxStepsExceeded extends Schema.TaggedErrorClass<MaxStepsExceeded>(
   },
 ) {}
 
+// Tool error classes use `toolName` to avoid overwriting Error.name, while the
+// public wire contract keeps the canonical tool key `name`.
 export const AgentError = Schema.Union([
-  ProviderError,
-  ToolDecodeError,
-  ToolExecutionError,
-  MaxStepsExceeded,
+  Schema.TaggedStruct("ProviderError", { message: Schema.String }),
+  Schema.TaggedStruct("ToolDecodeError", {
+    toolCallId: ToolCallId,
+    name: ToolName,
+    message: Schema.String,
+  }),
+  Schema.TaggedStruct("ToolExecutionError", {
+    toolCallId: ToolCallId,
+    name: ToolName,
+    message: Schema.String,
+  }),
+  Schema.TaggedStruct("MaxStepsExceeded", { maxSteps: NonNegativeIntBase }),
 ]).annotate({ identifier: "AgentError" });
 export type AgentError = Schema.Schema.Type<typeof AgentError>;

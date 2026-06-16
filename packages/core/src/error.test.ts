@@ -3,7 +3,6 @@ import { Effect, Schema } from "effect";
 
 import {
   AgentError,
-  MaxStepsExceeded,
   ProviderError,
   ToolCallId,
   ToolDecodeError,
@@ -52,58 +51,27 @@ it("preserves tool error names for diagnostics", () => {
 });
 
 it("round-trips every core agent error through its plain contract", () => {
-  for (const { ctor, input } of [
-    {
-      ctor: ProviderError,
-      input: { _tag: "ProviderError", message: "model failed" },
-    },
-    {
-      ctor: ToolDecodeError,
-      input: {
-        _tag: "ToolDecodeError",
-        toolCallId: "call_123",
-        toolName: "read",
-        message: "invalid input",
-      },
-    },
-    {
-      ctor: ToolExecutionError,
-      input: {
-        _tag: "ToolExecutionError",
-        toolCallId: "call_123",
-        toolName: "read",
-        message: "permission denied",
-      },
-    },
-    {
-      ctor: MaxStepsExceeded,
-      input: { _tag: "MaxStepsExceeded", maxSteps: 3 },
-    },
-  ] as const) {
-    const error = Schema.decodeUnknownSync(AgentError)(input);
-
-    assert.strictEqual(error instanceof ctor, true);
-    assert.strictEqual(error._tag, input._tag);
-    assert.deepStrictEqual(Schema.encodeUnknownSync(AgentError)(error), input);
-  }
-});
-
-it("encodes constructed tool errors as plain objects", () => {
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(AgentError)(
-      new ToolDecodeError({
-        toolCallId,
-        toolName,
-        message: "invalid input",
-      }),
-    ),
+  for (const input of [
+    { _tag: "ProviderError", message: "model failed" },
     {
       _tag: "ToolDecodeError",
       toolCallId: "call_123",
-      toolName: "read",
+      name: "read",
       message: "invalid input",
     },
-  );
+    {
+      _tag: "ToolExecutionError",
+      toolCallId: "call_123",
+      name: "read",
+      message: "permission denied",
+    },
+    { _tag: "MaxStepsExceeded", maxSteps: 3 },
+  ] as const) {
+    const error = Schema.decodeUnknownSync(AgentError)(input);
+
+    assert.strictEqual(error._tag, input._tag);
+    assert.deepStrictEqual(Schema.encodeUnknownSync(AgentError)(error), input);
+  }
 });
 
 it("rejects malformed tool errors", () => {
@@ -111,7 +79,7 @@ it("rejects malformed tool errors", () => {
     Schema.decodeUnknownSync(AgentError)({
       _tag: "ToolDecodeError",
       toolCallId: "",
-      toolName: "read",
+      name: "read",
       message: "invalid input",
     }),
   );
@@ -120,7 +88,7 @@ it("rejects malformed tool errors", () => {
     Schema.decodeUnknownSync(AgentError)({
       _tag: "ToolExecutionError",
       toolCallId: "call_123",
-      toolName: "",
+      name: "",
       message: "failed",
     }),
   );

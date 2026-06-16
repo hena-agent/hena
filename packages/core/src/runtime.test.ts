@@ -1,8 +1,13 @@
 import { assert, it } from "@effect/vitest";
 import { Deferred, Effect, Fiber, Ref, Schema, Stream } from "effect";
-import { LanguageModel, Prompt, type Response, Tool } from "effect/unstable/ai";
+import { LanguageModel, Prompt, Response, Tool } from "effect/unstable/ai";
 
 import { Runtime } from "./index";
+import {
+  applyAssistantPart,
+  finishAssistant,
+  makeAssistantState,
+} from "./runtime/assistant";
 import { makeRegisteredTool } from "./runtime/tool";
 
 const emptyUsage = {
@@ -87,6 +92,181 @@ it.effect("records assistant messages and lifecycle events", () =>
         "turn_end",
         "idle",
       ],
+    );
+  }),
+);
+
+it.effect("records one session start across multiple prompts", () =>
+  Effect.gen(function* () {
+    const runtime = yield* Runtime.make();
+    const model = yield* scriptedModel([
+      [textDelta("one"), finish("stop")],
+      [textDelta("two"), finish("stop")],
+    ]);
+
+    yield* runtime.registerProvider(model);
+    yield* runtime.prompt(userMessage("one"));
+    yield* runtime.prompt(userMessage("two"));
+
+    const events = yield* runtime.events();
+
+    assert.strictEqual(
+      events.filter((event) => event.type === "session_start").length,
+      1,
+    );
+  }),
+);
+
+it.effect("folds all supported assistant stream parts", () =>
+  Effect.gen(function* () {
+    const state = makeAssistantState();
+
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-start", { id: "t" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-delta", { id: "t", delta: "hello" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-end", { id: "t" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-delta", { id: "loose", delta: "!" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("text-end", { id: "missing" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("reasoning-start", { id: "r" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("reasoning-delta", { id: "r", delta: "why" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("reasoning-end", { id: "r" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("reasoning-delta", { id: "loose-r", delta: "hmm" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("reasoning-end", { id: "missing-r" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.toolCallPart({
+        id: "call-1",
+        name: "lookup",
+        params: {},
+        providerExecuted: false,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.toolResultPart({
+        id: "call-1",
+        name: "lookup",
+        isFailure: false,
+        result: "ok",
+        encodedResult: "ok",
+        providerExecuted: false,
+        preliminary: false,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.toolResultPart({
+        id: "call-2",
+        name: "lookup",
+        isFailure: false,
+        result: "skip",
+        encodedResult: "skip",
+        providerExecuted: false,
+        preliminary: true,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.toolApprovalRequestPart({
+        approvalId: "approval-1",
+        toolCallId: "call-1",
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("file", {
+        mediaType: "text/plain",
+        data: new Uint8Array([1]),
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("tool-params-start", {
+        id: "params-1",
+        name: "lookup",
+        providerExecuted: false,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("tool-params-delta", { id: "params-1", delta: "{}" }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("tool-params-end", { id: "params-1" }),
+    );
+    const documentSource = yield* Schema.decodeUnknownEffect(
+      Response.DocumentSourcePart,
+    )({
+      type: "source",
+      sourceType: "document",
+      id: "doc-1",
+      mediaType: "text/plain",
+      title: "doc",
+    });
+
+    yield* applyAssistantPart(state, documentSource);
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("response-metadata", {
+        id: undefined,
+        modelId: undefined,
+        timestamp: undefined,
+        request: undefined,
+      }),
+    );
+    yield* applyAssistantPart(
+      state,
+      Response.makePart("finish", finish("stop")),
+    );
+
+    const result = finishAssistant(state);
+
+    assert.deepStrictEqual(
+      result.message.content.map((part) => part.type),
+      [
+        "text",
+        "text",
+        "reasoning",
+        "reasoning",
+        "tool-call",
+        "tool-result",
+        "tool-approval-request",
+        "file",
+      ],
+    );
+    assert.deepStrictEqual(
+      result.toolCalls.map((call) => call.id),
+      ["call-1"],
     );
   }),
 );
@@ -314,6 +494,32 @@ it.effect("fails stream error parts and rolls back transcript", () =>
         "idle",
       ],
     );
+  }),
+);
+
+it.effect("fails runaway tool loops with a loop limit error", () =>
+  Effect.gen(function* () {
+    const runtime = yield* Runtime.make();
+    const repeat = Tool.make("repeat", { success: Schema.String });
+    const model = yield* LanguageModel.make({
+      generateText: () => Effect.die("unused generateText"),
+      streamText: () =>
+        Stream.fromIterable([
+          {
+            type: "tool-call" as const,
+            id: "repeat",
+            name: "repeat",
+            params: {},
+          },
+          finish("tool-calls"),
+        ]),
+    });
+
+    yield* runtime.registerProvider(model);
+    yield* runtime.registerTool(repeat, () => Effect.succeed("again"));
+    const result = yield* Effect.result(runtime.prompt(userMessage("loop")));
+
+    assert.strictEqual(result._tag, "Failure");
   }),
 );
 

@@ -43,8 +43,9 @@ const appendTextDelta = (
   state: AssistantState,
   part: Response.TextDeltaPart,
 ): void => {
-  if (state.text.has(part.id)) {
-    state.text.set(part.id, `${state.text.get(part.id) ?? ""}${part.delta}`);
+  const text = state.text.get(part.id);
+  if (text !== undefined) {
+    state.text.set(part.id, `${text}${part.delta}`);
     return;
   }
   state.content.push(Prompt.textPart({ text: part.delta }));
@@ -54,30 +55,28 @@ const appendReasoningDelta = (
   state: AssistantState,
   part: Response.ReasoningDeltaPart,
 ): void => {
-  if (state.reasoning.has(part.id)) {
-    state.reasoning.set(
-      part.id,
-      `${state.reasoning.get(part.id) ?? ""}${part.delta}`,
-    );
+  const reasoning = state.reasoning.get(part.id);
+  if (reasoning !== undefined) {
+    state.reasoning.set(part.id, `${reasoning}${part.delta}`);
     return;
   }
   state.content.push(Prompt.reasoningPart({ text: part.delta }));
 };
 
 const appendActiveText = (state: AssistantState, id: string): void => {
-  if (!state.text.has(id)) {
+  const text = state.text.get(id);
+  if (text === undefined) {
     return;
   }
-  state.content.push(Prompt.textPart({ text: state.text.get(id) ?? "" }));
+  state.content.push(Prompt.textPart({ text }));
   state.text.delete(id);
 };
 
 const appendActiveReasoning = (state: AssistantState, id: string): void => {
-  if (!state.reasoning.has(id)) {
+  const reasoning = state.reasoning.get(id);
+  if (reasoning === undefined) {
     return;
   }
-  state.content.push(
-    Prompt.reasoningPart({ text: state.reasoning.get(id) ?? "" }),
-  );
+  state.content.push(Prompt.reasoningPart({ text: reasoning }));
   state.reasoning.delete(id);
 };

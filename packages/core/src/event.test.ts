@@ -1,10 +1,10 @@
 import { assert, it } from "@effect/vitest";
 import { Schema, SchemaAST } from "effect";
 
+import { AgentEventSchemas } from "./event/agent-event";
 import type { AgentEvent as AgentEventType } from "./index";
 import {
   AgentEvent,
-  AgentEventSchemas,
   DiagnosticEvent,
   DiagnosticLevel,
   ErrorEvent,
@@ -191,45 +191,6 @@ it("rejects invalid event sequence and part identifiers", () => {
   assert.throws(() => Schema.decodeUnknownSync(PartId)(""));
 });
 
-it("decodes run lifecycle events", () => {
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(RunStartEvent)(
-      Schema.decodeUnknownSync(RunStartEvent)({
-        ...baseEvent,
-        type: "run-start",
-        parentRunId: "run_parent",
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "run-start",
-      parentRunId: "run_parent",
-    },
-  );
-
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(RunEndEvent)(
-      Schema.decodeUnknownSync(RunEndEvent)({
-        ...baseEvent,
-        type: "run-end",
-        reason: "max-steps",
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "run-end",
-      reason: "max-steps",
-    },
-  );
-
-  for (const event of [
-    { ...baseEvent, type: "turn-start", step: 0 },
-    { ...baseEvent, type: "turn-end", step: 0 },
-  ] as const) {
-    assertAgentEventRoundTrip(event);
-  }
-});
-
 it("rejects malformed run lifecycle events", () => {
   assert.throws(() =>
     Schema.decodeUnknownSync(RunStartEvent)({
@@ -256,34 +217,10 @@ it("rejects malformed run lifecycle events", () => {
   );
 });
 
-it("decodes message lifecycle events", () => {
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(AgentEvent)(
-      Schema.decodeUnknownSync(AgentEvent)({
-        ...baseEvent,
-        type: "message-start",
-        messageId: "msg_123",
-        role: "assistant",
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "message-start",
-      messageId: "msg_123",
-      role: "assistant",
-    },
+it("decodes nested message-end messages", () => {
+  const messageEnd = Schema.decodeUnknownSync(MessageEndEvent)(
+    agentEventFixtures["message-end"],
   );
-
-  const messageEnd = Schema.decodeUnknownSync(MessageEndEvent)({
-    ...baseEvent,
-    type: "message-end",
-    message: {
-      id: "msg_123",
-      role: "assistant",
-      parts: [{ type: "text", text: "hello" }],
-      createdAt: 1,
-    },
-  });
 
   assert.strictEqual(messageEnd.message.parts[0]?.type, "text");
 });
@@ -297,101 +234,18 @@ it("rejects non-assistant message start events", () => {
       role: "user",
     }),
   );
-});
 
-it("decodes text and reasoning stream events", () => {
-  for (const event of [
-    {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(MessageEndEvent)({
       ...baseEvent,
-      type: "text-start",
-      messageId: "msg_123",
-      partId: "part_1",
-    },
-    {
-      ...baseEvent,
-      type: "text-delta",
-      messageId: "msg_123",
-      partId: "part_1",
-      delta: "hello",
-    },
-    { ...baseEvent, type: "text-end", messageId: "msg_123", partId: "part_1" },
-    {
-      ...baseEvent,
-      type: "reasoning-start",
-      messageId: "msg_123",
-      partId: "part_2",
-    },
-    {
-      ...baseEvent,
-      type: "reasoning-delta",
-      messageId: "msg_123",
-      partId: "part_2",
-      delta: "thinking",
-    },
-    {
-      ...baseEvent,
-      type: "reasoning-end",
-      messageId: "msg_123",
-      partId: "part_2",
-    },
-  ] as const) {
-    assertAgentEventRoundTrip(event);
-  }
-});
-
-it("decodes tool stream and execution events", () => {
-  for (const event of [
-    {
-      ...baseEvent,
-      type: "tool-input-start",
-      toolCallId: "call_123",
-      name: "read",
-    },
-    {
-      ...baseEvent,
-      type: "tool-input-delta",
-      toolCallId: "call_123",
-      delta: '{"filePath":',
-    },
-    { ...baseEvent, type: "tool-input-end", toolCallId: "call_123" },
-    {
-      ...baseEvent,
-      type: "tool-call",
-      toolCallId: "call_123",
-      name: "read",
-      input: { filePath: "README.md" },
-    },
-    { ...baseEvent, type: "tool-execution-start", toolCallId: "call_123" },
-    {
-      ...baseEvent,
-      type: "tool-execution-delta",
-      toolCallId: "call_123",
-      chunk: { bytesRead: 10 },
-    },
-    { ...baseEvent, type: "tool-execution-end", toolCallId: "call_123" },
-  ] as const) {
-    assertAgentEventRoundTrip(event);
-  }
-});
-
-it("decodes tool result events", () => {
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(ToolResultEvent)(
-      Schema.decodeUnknownSync(ToolResultEvent)({
-        ...baseEvent,
-        type: "tool-result",
-        toolCallId: "call_123",
-        output: { text: "file contents" },
-        isError: false,
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "tool-result",
-      toolCallId: "call_123",
-      output: { text: "file contents" },
-      isError: false,
-    },
+      type: "message-end",
+      message: {
+        id: "msg_123",
+        role: "user",
+        parts: [{ type: "text", text: "hello" }],
+        createdAt: 1,
+      },
+    }),
   );
 });
 
@@ -416,48 +270,10 @@ it("rejects non-json tool event payloads", () => {
   );
 });
 
-it("decodes usage, diagnostic, and error events", () => {
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(AgentEvent)(
-      Schema.decodeUnknownSync(AgentEvent)({
-        ...baseEvent,
-        type: "usage",
-        usage: { inputTokens: 10, outputTokens: 4 },
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "usage",
-      usage: { inputTokens: 10, outputTokens: 4 },
-    },
+it("decodes nested terminal errors", () => {
+  const errorEvent = Schema.decodeUnknownSync(ErrorEvent)(
+    agentEventFixtures.error,
   );
-
-  assert.deepStrictEqual(
-    Schema.encodeUnknownSync(AgentEvent)(
-      Schema.decodeUnknownSync(AgentEvent)({
-        ...baseEvent,
-        type: "diagnostic",
-        level: "warn",
-        extension: "ext-test",
-        message: "hook failed",
-        cause: { detail: "boom" },
-      }),
-    ),
-    {
-      ...baseEvent,
-      type: "diagnostic",
-      level: "warn",
-      extension: "ext-test",
-      message: "hook failed",
-      cause: { detail: "boom" },
-    },
-  );
-
-  const errorEvent = Schema.decodeUnknownSync(ErrorEvent)({
-    ...baseEvent,
-    type: "error",
-    error: { _tag: "ProviderError", message: "model failed" },
-  });
 
   assert.strictEqual(errorEvent.error._tag, "ProviderError");
 });

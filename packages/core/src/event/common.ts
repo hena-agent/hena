@@ -14,48 +14,49 @@ const eventIdentifier = (type: string): string =>
     .map((segment) => `${segment[0]?.toUpperCase()}${segment.slice(1)}`)
     .join("")}Event`;
 
-const structFields = <const Fields extends Schema.Struct.Fields>(
-  fields: Fields,
-): Fields => fields;
-
-const EventBaseFields = structFields({
+// biome-ignore lint/nursery/useExplicitType: explicit mirror types create drift here.
+const EventBaseFields = {
   runId: RunId,
   sessionId: SessionId,
   seq: EventSeq,
-});
+};
 
-const TextStreamFields = structFields({
-  ...EventBaseFields,
+// biome-ignore lint/nursery/useExplicitType: explicit mirror types create drift here.
+const TextStreamFields = {
   messageId: MessageId,
   partId: PartId,
-});
+};
 
-type EventFields<
-  Type extends string,
-  Fields extends Schema.Struct.Fields,
-> = typeof EventBaseFields &
-  Fields & {
-    readonly type: Schema.Literal<Type>;
-  };
+type ReservedEventField = keyof typeof EventBaseFields | "type";
 
+type EventFieldsInput<Fields extends Schema.Struct.Fields> =
+  Extract<keyof Fields, ReservedEventField> extends never ? Fields : never;
+
+// biome-ignore lint/nursery/useExplicitType: preserve Effect Schema service inference.
 export const defineEvent = <
   const Type extends string,
   const Fields extends Schema.Struct.Fields,
 >(
   type: Type,
-  fields: Fields,
-): Schema.Struct<EventFields<Type, Fields>> =>
+  fields: EventFieldsInput<Fields>,
+) =>
   Schema.Struct({
+    ...fields,
     ...EventBaseFields,
     type: Schema.Literal(type),
-    ...fields,
   }).annotate({ identifier: eventIdentifier(type) });
 
+// biome-ignore lint/nursery/useExplicitType: preserve Effect Schema service inference.
 export const defineTextStreamEvent = <
   const Type extends string,
   const Fields extends Schema.Struct.Fields,
 >(
   type: Type,
-  fields: Fields,
-): Schema.Struct<EventFields<Type, typeof TextStreamFields & Fields>> =>
-  defineEvent(type, structFields({ ...TextStreamFields, ...fields }));
+  fields: EventFieldsInput<Fields>,
+) =>
+  Schema.Struct({
+    ...fields,
+    ...TextStreamFields,
+    ...EventBaseFields,
+    type: Schema.Literal(type),
+  }).annotate({ identifier: eventIdentifier(type) });

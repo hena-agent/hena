@@ -1,8 +1,16 @@
 import { Schema } from "effect";
 
-import { Message } from "../domain/message";
-import { MessageId } from "../domain/primitives";
+import { Part } from "../domain/parts";
+import { JsonValue, MessageId, TimestampMillis } from "../domain/primitives";
 import { defineEvent, defineTextStreamEvent } from "./common";
+
+const AssistantMessage = Schema.Struct({
+  id: MessageId,
+  role: Schema.Literal("assistant"),
+  parts: Schema.Array(Part),
+  metadata: Schema.optionalKey(Schema.Record(Schema.String, JsonValue)),
+  createdAt: TimestampMillis,
+}).annotate({ identifier: "AssistantMessage" });
 
 export const MessageStartEvent = defineEvent("message-start", {
   messageId: MessageId,
@@ -11,7 +19,7 @@ export const MessageStartEvent = defineEvent("message-start", {
 export type MessageStartEvent = Schema.Schema.Type<typeof MessageStartEvent>;
 
 export const MessageEndEvent = defineEvent("message-end", {
-  message: Message,
+  message: AssistantMessage,
 });
 export type MessageEndEvent = Schema.Schema.Type<typeof MessageEndEvent>;
 

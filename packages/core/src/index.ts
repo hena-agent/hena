@@ -37,10 +37,9 @@ export {
   ToolExecutionError,
 } from "./error/agent-error";
 
-export { AgentEvent, AgentEventSchemas } from "./event/agent-event";
+export { AgentEvent } from "./event/agent-event";
 
 export {
-  LifecycleEvents,
   RunEndEvent,
   RunStartEvent,
   TurnEndEvent,
@@ -49,7 +48,6 @@ export {
 
 export {
   MessageEndEvent,
-  MessageEvents,
   MessageStartEvent,
   ReasoningDeltaEvent,
   ReasoningEndEvent,
@@ -63,13 +61,11 @@ export {
   DiagnosticEvent,
   DiagnosticLevel,
   ErrorEvent,
-  TerminalEvents,
   UsageEvent,
 } from "./event/terminal";
 
 export {
   ToolCallEvent,
-  ToolEvents,
   ToolExecutionDeltaEvent,
   ToolExecutionEndEvent,
   ToolExecutionStartEvent,

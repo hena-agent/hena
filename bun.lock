@@ -16,6 +16,22 @@
         "vitest": "4.1.8",
       },
     },
+    "packages/app": {
+      "name": "@hena-dev/app",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "vitest": "4.1.8",
+      },
+    },
+    "packages/cli": {
+      "name": "@hena-dev/cli",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "vitest": "4.1.8",
+      },
+    },
     "packages/client": {
       "name": "@hena-dev/client",
       "version": "0.0.0",
@@ -35,27 +51,32 @@
         "vitest": "4.1.8",
       },
     },
-    "packages/extensions": {
-      "name": "@hena-dev/extensions",
+    "packages/db": {
+      "name": "@hena-dev/db",
       "version": "0.0.0",
       "devDependencies": {
         "@effect/vitest": "catalog:",
         "vitest": "4.1.8",
       },
     },
-    "packages/hena": {
-      "name": "@hena-dev/hena",
+    "packages/desktop": {
+      "name": "@hena-dev/desktop",
       "version": "0.0.0",
-      "bin": {
-        "hena": "./dist/index.js",
-      },
       "devDependencies": {
         "@effect/vitest": "catalog:",
         "vitest": "4.1.8",
       },
     },
-    "packages/web-ui": {
-      "name": "@hena-dev/web-ui",
+    "packages/server": {
+      "name": "@hena-dev/server",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@effect/vitest": "catalog:",
+        "vitest": "4.1.8",
+      },
+    },
+    "packages/web": {
+      "name": "@hena-dev/web",
       "version": "0.0.0",
       "devDependencies": {
         "@effect/vitest": "catalog:",
@@ -125,15 +146,21 @@
 
     "@emnapi/wasi-threads": ["@emnapi/wasi-threads@1.2.1", "", { "dependencies": { "tslib": "^2.4.0" } }, "sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w=="],
 
+    "@hena-dev/app": ["@hena-dev/app@workspace:packages/app"],
+
+    "@hena-dev/cli": ["@hena-dev/cli@workspace:packages/cli"],
+
     "@hena-dev/client": ["@hena-dev/client@workspace:packages/client"],
 
     "@hena-dev/core": ["@hena-dev/core@workspace:packages/core"],
 
-    "@hena-dev/extensions": ["@hena-dev/extensions@workspace:packages/extensions"],
+    "@hena-dev/db": ["@hena-dev/db@workspace:packages/db"],
 
-    "@hena-dev/hena": ["@hena-dev/hena@workspace:packages/hena"],
+    "@hena-dev/desktop": ["@hena-dev/desktop@workspace:packages/desktop"],
 
-    "@hena-dev/web-ui": ["@hena-dev/web-ui@workspace:packages/web-ui"],
+    "@hena-dev/server": ["@hena-dev/server@workspace:packages/server"],
+
+    "@hena-dev/web": ["@hena-dev/web@workspace:packages/web"],
 
     "@istanbuljs/schema": ["@istanbuljs/schema@0.1.6", "", {}, "sha512-+Sg6GCR/wy1oSmQDFq4LQDAhm3ETKnorxN+y5nbLULOR3P0c14f2Wurzj3/xqPXtasLFfHd5iRFQ7AJt4KH2cw=="],
 

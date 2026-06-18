@@ -1,6 +1,14 @@
 {
   "$schema": "https://unpkg.com/knip/schema.json",
   "workspaces": {
+    "packages/app": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/cli": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
     "packages/client": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
@@ -9,15 +17,19 @@
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/extensions": {
+    "packages/db": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/hena": {
+    "packages/desktop": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     },
-    "packages/web-ui": {
+    "packages/server": {
+      "entry": ["src/index.ts"],
+      "project": ["src/**/*.ts"]
+    },
+    "packages/web": {
       "entry": ["src/index.ts"],
       "project": ["src/**/*.ts"]
     }

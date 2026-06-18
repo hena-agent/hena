@@ -1,13 +1,10 @@
 {
-  "name": "@hena-dev/hena",
+  "name": "@hena-dev/web",
   "version": "0.0.0",
   "type": "module",
   "license": "MIT",
   "publishConfig": {
     "access": "public"
-  },
-  "bin": {
-    "hena": "./dist/index.js"
   },
   "exports": {
     ".": {

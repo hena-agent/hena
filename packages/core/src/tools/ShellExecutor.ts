@@ -1,6 +1,8 @@
-import { Context, Effect, Layer, Stream } from "effect";
-import type { PlatformError } from "effect/PlatformError";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
+import type * as PiAgent from "@earendil-works/pi-agent-core";
+import { Context, Effect, Layer } from "effect";
+
+import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
+import { ToolShellError } from "./toolErrors";
 
 interface ShellExecutionResult {
   readonly exitCode: number;
@@ -11,27 +13,31 @@ export interface ShellExecutorShape {
   readonly execute: (
     command: string,
     cwd: string,
-  ) => Effect.Effect<ShellExecutionResult, PlatformError>;
+  ) => Effect.Effect<ShellExecutionResult, ToolShellError>;
 }
 
-const collectOutput = (
-  handle: ChildProcessSpawner.ChildProcessHandle,
-): Effect.Effect<string, PlatformError> =>
-  handle.all.pipe(Stream.decodeText(), Stream.mkString);
+const shellError = (error: PiAgent.ExecutionError): ToolShellError =>
+  new ToolShellError({ code: error.code, message: error.message });
+
+const rejectedShellError = (): ToolShellError =>
+  new ToolShellError({ code: "unknown", message: "Shell execution failed" });
 
 const makeShellExecutor = Effect.fnUntraced(function* () {
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const environment = yield* ExecutionEnvironmentService;
   return {
     execute: Effect.fnUntraced(function* (commandText: string, cwd: string) {
-      return yield* Effect.scoped(
-        Effect.gen(function* () {
-          const command = ChildProcess.make("sh", ["-c", commandText], { cwd });
-          const handle = yield* spawner.spawn(command);
-          const output = yield* collectOutput(handle);
-          const exitCode = Number(yield* handle.exitCode);
-          return { output, exitCode } satisfies ShellExecutionResult;
-        }),
-      );
+      const result = yield* Effect.tryPromise({
+        // oxlint-disable-next-line typescript/promise-function-async
+        try: () => environment.env.exec(commandText, { cwd }),
+        catch: rejectedShellError,
+      });
+      if (!result.ok) {
+        return yield* Effect.fail(shellError(result.error));
+      }
+      return {
+        output: `${result.value.stdout}${result.value.stderr}`,
+        exitCode: result.value.exitCode,
+      } satisfies ShellExecutionResult;
     }),
   } satisfies ShellExecutorShape;
 });
@@ -40,9 +46,6 @@ export class ShellExecutor extends Context.Service<
   ShellExecutor,
   ShellExecutorShape
 >()("@hena-dev/core/ShellExecutor") {
-  static Live: Layer.Layer<
-    ShellExecutor,
-    never,
-    ChildProcessSpawner.ChildProcessSpawner
-  > = Layer.effect(ShellExecutor)(makeShellExecutor());
+  static Live: Layer.Layer<ShellExecutor, never, ExecutionEnvironmentService> =
+    Layer.effect(ShellExecutor)(makeShellExecutor());
 }

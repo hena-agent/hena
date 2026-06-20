@@ -14,9 +14,25 @@ export class ToolHttpError extends Schema.TaggedErrorClass<ToolHttpError>()(
   { message: Schema.String },
 ) {}
 
+export class ToolShellError extends Schema.TaggedErrorClass<ToolShellError>()(
+  "ToolShellError",
+  {
+    code: Schema.Literals([
+      "aborted",
+      "timeout",
+      "shell_unavailable",
+      "spawn_error",
+      "callback_error",
+      "unknown",
+    ]),
+    message: Schema.String,
+  },
+) {}
+
 export type ToolExecutionError =
   | PathGuardError
   | PlatformError
   | QuestionRejectedError
   | ToolHttpError
-  | ToolInputError;
+  | ToolInputError
+  | ToolShellError;

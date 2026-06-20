@@ -5,7 +5,7 @@ import {
   Layer,
 } from "effect";
 import type { PlatformError } from "effect/PlatformError";
-
+import type { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import {
   type ExecutionEnvProvider,
   type ExecutionEnvProviderError,
@@ -38,6 +38,7 @@ export const makeSessionRuntimeLayer = (
   | PermissionService
   | QuestionService
   | PathGuard
+  | ExecutionEnvironmentService
   | ToolWorkspace,
   | AgentHarnessFactoryError
   | ExecutionEnvProviderError

@@ -1,13 +1,21 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Effect, type Scope } from "effect";
 
-import type { ExecutionEnvProviderError } from "../execution/ExecutionEnvProvider";
+import type {
+  ExecutionEnvironment,
+  ExecutionEnvProviderError,
+} from "../execution/ExecutionEnvProvider";
 import type { CredentialResolverShape } from "../model/credentials";
 import type {
   HarnessCredentialCallback,
   MakeAgentHarnessOptionsInput,
 } from "./optionsTypes";
 import { makeHarnessSystemPromptCallback } from "./systemPromptCallback";
+
+interface MakeOptionsFromEnvironmentInput
+  extends Omit<MakeAgentHarnessOptionsInput, "execution"> {
+  readonly environment: ExecutionEnvironment;
+}
 
 const credentialCallback =
   (credentials: CredentialResolverShape): HarnessCredentialCallback =>
@@ -29,6 +37,16 @@ export const makeAgentHarnessOptions: (
   );
   yield* Effect.addFinalizer(() => environment.cleanup);
 
+  return makeAgentHarnessOptionsFromEnvironment({
+    ...input,
+    environment,
+  });
+});
+
+export const makeAgentHarnessOptionsFromEnvironment = (
+  input: MakeOptionsFromEnvironmentInput,
+): PiAgent.AgentHarnessOptions => {
+  const environment = input.environment;
   return {
     env: environment.env,
     session: input.session,
@@ -52,4 +70,4 @@ export const makeAgentHarnessOptions: (
       : { thinkingLevel: input.thinkingLevel }),
     ...(input.tools === undefined ? {} : { tools: [...input.tools] }),
   } satisfies PiAgent.AgentHarnessOptions;
-});
+};

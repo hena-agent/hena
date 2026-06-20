@@ -1,44 +1,70 @@
+import * as PiAgent from "@earendil-works/pi-agent-core";
+import * as PiNode from "@earendil-works/pi-agent-core/node";
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, Layer, Sink, Stream } from "effect";
-import {
-  type ChildProcess,
-  ChildProcessSpawner,
-} from "effect/unstable/process";
-
+import { Context, Effect, Layer } from "effect";
+import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
+import type { ExecutionEnvironment } from "../execution/ExecutionEnvProvider";
 import { BashTool, makeBashAgentTool } from "./BashTool";
+import { ToolShellError } from "./toolErrors";
 import { ToolWorkspace } from "./workspace";
 
-const encoder = new TextEncoder();
+interface ShellCall {
+  readonly command: string;
+  readonly cwd?: string;
+}
 
-const makeSpawner = (
+type ShellResult = Awaited<ReturnType<PiAgent.ExecutionEnv["exec"]>>;
+
+class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
+  constructor(
+    private readonly result: ShellResult | Error,
+    private readonly calls: Array<ShellCall>,
+  ) {
+    super({ cwd: "/workspace" });
+  }
+
+  override async exec(
+    command: string,
+    options?: PiAgent.ExecutionEnvExecOptions,
+  ): Promise<ShellResult> {
+    await Promise.resolve();
+    this.calls.push(
+      options?.cwd === undefined ? { command } : { command, cwd: options.cwd },
+    );
+    if (this.result instanceof Error) {
+      throw this.result;
+    }
+    return this.result;
+  }
+}
+
+const shellResult = (output: string, exitCode: number): ShellResult =>
+  PiAgent.ok({ stdout: output, stderr: "", exitCode });
+
+const shellFailure = (): ShellResult =>
+  PiAgent.err(new PiAgent.ExecutionError("spawn_error", "spawn failed"));
+
+const makeEnvironment = (
   output: string,
   exitCode: number,
-  commands: Array<ChildProcess.Command>,
-) =>
-  Layer.succeed(ChildProcessSpawner.ChildProcessSpawner)(
-    ChildProcessSpawner.make((command) =>
-      Effect.sync(() => {
-        commands.push(command);
-        const stream = Stream.make(encoder.encode(output));
-        return ChildProcessSpawner.makeHandle({
-          pid: ChildProcessSpawner.ProcessId(1),
-          exitCode: Effect.succeed(ChildProcessSpawner.ExitCode(exitCode)),
-          isRunning: Effect.succeed(false),
-          kill: () => Effect.void,
-          stdin: Sink.drain,
-          stdout: stream,
-          stderr: Stream.empty,
-          all: stream,
-          getInputFd: () => Sink.drain,
-          getOutputFd: () => Stream.empty,
-          unref: Effect.succeed(Effect.void),
-        });
-      }),
-    ),
-  );
+  calls: Array<ShellCall>,
+) => makeEnvironmentWithResult(shellResult(output, exitCode), calls);
+
+const makeEnvironmentWithResult = (
+  result: ShellResult | Error,
+  calls: Array<ShellCall>,
+) => {
+  const env = new FakeExecutionEnv(result, calls);
+  return Layer.succeed(ExecutionEnvironmentService)({
+    cwd: "/workspace",
+    roots: ["/workspace"],
+    env,
+    cleanup: Effect.void,
+  } satisfies ExecutionEnvironment);
+};
 
 it.effect("runs shell commands in the workspace cwd", () => {
-  const commands: Array<ChildProcess.Command> = [];
+  const calls: Array<ShellCall> = [];
 
   return Effect.gen(function* () {
     const tool = yield* BashTool;
@@ -53,14 +79,10 @@ it.effect("runs shell commands in the workspace cwd", () => {
       exitCode: 0,
     });
 
-    const command = commands[0];
-    if (command?._tag !== "StandardCommand") {
-      throw new Error("expected a standard command");
-    }
-    assert.strictEqual(command.options.cwd, "/workspace");
+    assert.deepStrictEqual(calls, [{ command: "pwd", cwd: "/workspace" }]);
   }).pipe(
     Effect.provide(BashTool.Live),
-    Effect.provide(makeSpawner("/workspace", 0, commands)),
+    Effect.provide(makeEnvironment("/workspace", 0, calls)),
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   );
 });
@@ -74,7 +96,35 @@ it.effect("returns non-zero shell exits as tool output", () =>
     assert.strictEqual(result.details.exitCode, 1);
   }).pipe(
     Effect.provide(BashTool.Live),
-    Effect.provide(makeSpawner("boom", 1, [])),
+    Effect.provide(makeEnvironment("boom", 1, [])),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  ),
+);
+
+it.effect("maps execution environment shell failures", () =>
+  Effect.gen(function* () {
+    const tool = yield* BashTool;
+    const error = yield* tool.execute({ command: "missing" }).pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolShellError);
+    assert.strictEqual(error.code, "spawn_error");
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(makeEnvironmentWithResult(shellFailure(), [])),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  ),
+);
+
+it.effect("maps rejected shell executions", () =>
+  Effect.gen(function* () {
+    const tool = yield* BashTool;
+    const error = yield* tool.execute({ command: "explode" }).pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolShellError);
+    assert.strictEqual(error.code, "unknown");
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(makeEnvironmentWithResult(new Error("boom"), [])),
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   ),
 );

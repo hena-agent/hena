@@ -25,11 +25,10 @@ export interface CredentialResolverShape {
   ) => Effect.Effect<ApiKeyAndHeaders | undefined>;
 }
 
-const mergeHeaders = (
-  modelHeaders: Readonly<Record<string, string>> | undefined,
+const configuredHeaders = (
   sourceHeaders: Readonly<Record<string, string>> | undefined,
 ): Record<string, string> | undefined => {
-  const headers = { ...modelHeaders, ...sourceHeaders };
+  const headers = { ...sourceHeaders };
   return Object.keys(headers).length === 0 ? undefined : headers;
 };
 
@@ -60,6 +59,6 @@ export const makeCredentialResolver = (
       if (apiKey === undefined) {
         return undefined;
       }
-      return withHeaders(apiKey, mergeHeaders(model.headers, source?.headers));
+      return withHeaders(apiKey, configuredHeaders(source?.headers));
     }),
 });

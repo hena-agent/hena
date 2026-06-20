@@ -80,7 +80,7 @@ it("uses opencode reserve policy by default", () => {
 
 it("computes context usage from the last assistant usage", () => {
   const context = getContextUsage({
-    entries: [messageEntry("msg-1", assistantMessage(96_000))],
+    activePathEntries: [messageEntry("msg-1", assistantMessage(96_000))],
     model,
   });
 
@@ -92,7 +92,7 @@ it("computes context usage from the last assistant usage", () => {
 
 it("falls back to estimating messages when no usage exists", () => {
   const context = getContextUsage({
-    entries: [messageEntry("msg-1", userMessage("hello world"))],
+    activePathEntries: [messageEntry("msg-1", userMessage("hello world"))],
     model,
   });
 
@@ -128,7 +128,7 @@ it.effect("compacts overflowing post-turn sessions", () =>
     };
 
     const result = yield* autoCompactAfterTurn({
-      entries: [messageEntry("msg-1", assistantMessage(96_000))],
+      activePathEntries: [messageEntry("msg-1", assistantMessage(96_000))],
       instructions: "compact tightly",
       model,
       runtime,
@@ -145,7 +145,7 @@ it.effect("skips compaction when the latest turn is already compacted", () =>
       compact: () => Effect.die("compact should not run"),
     };
     const result = yield* autoCompactAfterTurn({
-      entries: [
+      activePathEntries: [
         messageEntry("msg-1", assistantMessage(96_000)),
         compactionEntry("cmp-1"),
       ],

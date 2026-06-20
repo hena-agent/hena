@@ -23,5 +23,4 @@ export const toModel = (
   ...(config.thinkingLevelMap === undefined
     ? {}
     : { thinkingLevelMap: config.thinkingLevelMap }),
-  ...(config.headers === undefined ? {} : { headers: { ...config.headers } }),
 });

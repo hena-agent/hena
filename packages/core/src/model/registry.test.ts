@@ -46,7 +46,6 @@ it.effect(
             id: "full",
             api: "openai-responses",
             cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4 },
-            headers: { authorization: "Bearer token" },
             input: ["text", "image"],
             reasoning: true,
             thinkingLevelMap: { xhigh: "max" },
@@ -66,10 +65,9 @@ it.effect(
       const [minimal] = yield* registry.getModels("minimal");
 
       assert.ok(openai.some((model) => model.id === "gpt-4o-mini"));
-      assert.strictEqual(custom?.api, "openai-responses");
-      assert.deepStrictEqual(custom?.headers, {
-        authorization: "Bearer token",
-      });
+      assert.ok(custom !== undefined);
+      assert.strictEqual(custom.api, "openai-responses");
+      assert.strictEqual("headers" in custom, false);
       assert.strictEqual(minimal?.name, "tiny");
       assert.strictEqual(minimal?.contextWindow, 4_096);
       assert.strictEqual(minimal?.maxTokens, 512);

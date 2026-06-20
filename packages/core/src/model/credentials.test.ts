@@ -16,12 +16,11 @@ it.effect("uses configured credentials before env credentials", () =>
     });
     const result = yield* resolver.getApiKeyAndHeaders({
       ...openaiModel,
-      headers: { "x-model": "yes" },
     });
 
     assert.deepStrictEqual(result, {
       apiKey: "config-key",
-      headers: { "x-model": "yes", "x-config": "yes" },
+      headers: { "x-config": "yes" },
     });
   }),
 );

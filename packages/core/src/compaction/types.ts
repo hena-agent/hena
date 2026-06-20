@@ -9,9 +9,11 @@ export interface AutoCompactionConfig {
   };
 }
 
+export type ActiveSessionPathEntries = ReadonlyArray<PiAgent.SessionTreeEntry>;
+
 export interface ContextUsageInput {
+  readonly activePathEntries: ActiveSessionPathEntries;
   readonly config?: AutoCompactionConfig;
-  readonly entries: ReadonlyArray<PiAgent.SessionTreeEntry>;
   readonly model: PiAi.Model<PiAi.Api>;
 }
 

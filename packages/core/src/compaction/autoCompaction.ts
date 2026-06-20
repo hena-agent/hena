@@ -54,7 +54,7 @@ const isAlreadyCompacted = (
 };
 
 export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
-  const entries = [...input.entries];
+  const entries = [...input.activePathEntries];
   const usage = PiAgent.getLastAssistantUsage(entries);
   const source = usage === undefined ? "estimate" : "usage";
   const tokens =
@@ -69,7 +69,7 @@ export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
     auto: input.config?.compaction?.auto !== false,
     contextWindow: input.model.contextWindow,
     overflow:
-      !isAlreadyCompacted(input.entries) &&
+      !isAlreadyCompacted(input.activePathEntries) &&
       shouldAutoCompact(tokens, input.model, input.config),
     reserve,
     source,

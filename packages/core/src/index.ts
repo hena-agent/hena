@@ -5,7 +5,8 @@ export const corePackageName = "@hena-dev/core";
 export const corePackageNameEffect = Effect.succeed(corePackageName);
 
 export { autoCompactAfterTurn } from "./compaction/autoCompaction";
-export type { AutoCompactionConfig, AutoCompactionInput, AutoCompactionResult, AutoCompactionRuntime, ContextUsage, ContextUsageInput } from "./compaction/types";
+export type { ActiveSessionPathEntries, AutoCompactionConfig, AutoCompactionInput, AutoCompactionResult, AutoCompactionRuntime, ContextUsage, ContextUsageInput } from "./compaction/types";
+export { ExecutionEnvironmentService } from "./execution/ExecutionEnvironmentService";
 export type { ExecutionEnvironment, ExecutionEnvProviderShape, ExecutionEnvRequest } from "./execution/ExecutionEnvProvider";
 export { ExecutionEnvProvider, ExecutionEnvProviderError, makeCloudExecutionEnvProvider, makeLocalExecutionEnvProvider } from "./execution/ExecutionEnvProvider";
 export { attachHarnessEventBridge } from "./harness/attachEvents";

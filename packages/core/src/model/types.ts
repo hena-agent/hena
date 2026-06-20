@@ -18,7 +18,6 @@ export interface CustomModelConfig {
   readonly baseUrl: string;
   readonly contextWindow: number;
   readonly cost?: PiAi.Model<PiAi.Api>["cost"];
-  readonly headers?: Readonly<Record<string, string>>;
   readonly id: string;
   readonly input?: ReadonlyArray<"text" | "image">;
   readonly maxTokens: number;

@@ -1,6 +1,7 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Context, Effect, Layer, Schema } from "effect";
-import type { ChildProcessSpawner } from "effect/unstable/process";
+
+import type { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import { ShellExecutor } from "./ShellExecutor";
 import type { CoreAgentTool } from "./schema";
 import {
@@ -47,7 +48,7 @@ export class BashTool extends Context.Service<BashTool, BashToolShape>()(
   static Live: Layer.Layer<
     BashTool,
     never,
-    ChildProcessSpawner.ChildProcessSpawner | ToolWorkspace
+    ExecutionEnvironmentService | ToolWorkspace
   > = Layer.effect(BashTool)(makeBashTool()).pipe(
     Layer.provideMerge(ShellExecutor.Live),
   );

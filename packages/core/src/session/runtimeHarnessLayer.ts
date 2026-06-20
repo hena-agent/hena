@@ -6,8 +6,9 @@ import {
   Layer,
 } from "effect";
 import type { PlatformError } from "effect/PlatformError";
-
+import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import {
+  type ExecutionEnvironment,
   ExecutionEnvProvider,
   type ExecutionEnvProviderError,
 } from "../execution/ExecutionEnvProvider";
@@ -15,7 +16,7 @@ import { attachHarnessEventBridge } from "../harness/attachEvents";
 import { makeHarnessEventBridge } from "../harness/events";
 import { HarnessService } from "../harness/HarnessService";
 import { makeHarnessService } from "../harness/makeHarnessService";
-import { makeAgentHarnessOptions } from "../harness/options";
+import { makeAgentHarnessOptionsFromEnvironment } from "../harness/options";
 import type { HarnessServiceShape } from "../harness/types";
 import { collectProjectInstructions } from "../systemPrompt/projectInstructions";
 import { AgentHarnessFactory } from "./AgentHarnessFactory";
@@ -30,17 +31,21 @@ import type {
 const runtimeContext = (
   service: SessionRuntimeShape,
   harness: HarnessServiceShape,
-): Context.Context<SessionRuntime | HarnessService> =>
+  environment: ExecutionEnvironment,
+): Context.Context<
+  SessionRuntime | HarnessService | ExecutionEnvironmentService
+> =>
   Context.empty().pipe(
     Context.add(SessionRuntime, service),
     Context.add(HarnessService, harness),
+    Context.add(ExecutionEnvironmentService, environment),
   );
 
 export const makeRuntimeHarnessLayer = (
   config: SessionRuntimeConfig,
   sessionID: string,
 ): Layer.Layer<
-  SessionRuntime | HarnessService,
+  SessionRuntime | HarnessService | ExecutionEnvironmentService,
   AgentHarnessFactoryError | ExecutionEnvProviderError | PlatformError,
   | AgentHarnessFactory
   | ExecutionEnvProvider
@@ -57,22 +62,20 @@ export const makeRuntimeHarnessLayer = (
         config.systemPrompt,
         projectInstructions,
       );
-      const options = yield* makeAgentHarnessOptions({
+      const request = {
+        sessionID,
+        cwd: config.cwd,
+        roots: config.roots,
+        ...(config.shellEnv === undefined ? {} : { shellEnv: config.shellEnv }),
+        ...(config.shellPath === undefined
+          ? {}
+          : { shellPath: config.shellPath }),
+      };
+      const environment = yield* envProvider.create(request);
+      yield* Effect.addFinalizer(() => environment.cleanup);
+      const options = makeAgentHarnessOptionsFromEnvironment({
         ...config,
-        execution: {
-          provider: envProvider,
-          request: {
-            sessionID,
-            cwd: config.cwd,
-            roots: config.roots,
-            ...(config.shellEnv === undefined
-              ? {}
-              : { shellEnv: config.shellEnv }),
-            ...(config.shellPath === undefined
-              ? {}
-              : { shellPath: config.shellPath }),
-          },
-        },
+        environment,
         ...(systemPrompt === undefined ? {} : { systemPrompt }),
       });
       const harness = yield* factory.create(options);
@@ -81,6 +84,7 @@ export const makeRuntimeHarnessLayer = (
       return runtimeContext(
         { sessionID, events: bridge.stream },
         harnessService,
+        environment,
       );
     }),
   );

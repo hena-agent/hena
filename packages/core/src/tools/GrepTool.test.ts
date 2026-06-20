@@ -54,6 +54,7 @@ const makeLayer = GrepTool.Live.pipe(
         Effect.succeed(
           path.endsWith("a.ts") ? "needle\nneedle" : "needle docs",
         ),
+      realPath: (path) => Effect.succeed(path),
       stat: (path) =>
         Effect.succeed(
           path === "/workspace" ? info("Directory") : info("File"),

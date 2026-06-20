@@ -17,6 +17,7 @@ import type { PermissionService } from "../permission/PermissionService";
 import { QuestionService } from "../question/QuestionService";
 import { ToolWorkspace } from "../tools/workspace";
 import type { AgentHarnessFactory } from "./AgentHarnessFactory";
+import { makeRuntimeExecutionEnvironmentLayer } from "./runtimeExecutionEnvironmentLayer";
 import { makeRuntimeHarnessLayer } from "./runtimeHarnessLayer";
 import { makeRuntimePathGuardLayer } from "./runtimePathGuardLayer";
 import type { SessionRuntime } from "./SessionRuntimeService";
@@ -53,8 +54,14 @@ export const makeSessionRuntimeLayer = (
     Effect.gen(function* () {
       const sessionID = yield* getSessionID(config.session);
       const runtimeConfig = normalizeRuntimeRoots(config);
+      const environmentLayer = makeRuntimeExecutionEnvironmentLayer(
+        runtimeConfig,
+        sessionID,
+      );
       return Layer.mergeAll(
-        makeRuntimeHarnessLayer(runtimeConfig, sessionID),
+        makeRuntimeHarnessLayer(runtimeConfig, sessionID).pipe(
+          Layer.provideMerge(environmentLayer),
+        ),
         QuestionService.Live,
         makeRuntimePathGuardLayer(runtimeConfig, sessionID),
         ToolWorkspace.layer({ cwd: runtimeConfig.cwd }),

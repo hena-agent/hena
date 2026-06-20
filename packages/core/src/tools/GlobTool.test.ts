@@ -71,6 +71,7 @@ it.effect("returns absolute paths matching a glob", () =>
       FileSystem.layerNoop({
         readDirectory: () =>
           Effect.succeed(["src/a.ts", "src/readme.md", "test/b.ts"]),
+        realPath: (path) => Effect.succeed(path),
         stat: (path) =>
           Effect.succeed(
             path.endsWith(".ts") || path.endsWith(".md")
@@ -112,6 +113,7 @@ it.effect("returns content for no glob matches", () =>
     Effect.provide(
       FileSystem.layerNoop({
         readDirectory: () => Effect.succeed(["src/a.ts"]),
+        realPath: (path) => Effect.succeed(path),
         stat: (path) =>
           Effect.succeed(
             path === "/workspace" ? fileInfo("Directory") : fileInfo("File"),

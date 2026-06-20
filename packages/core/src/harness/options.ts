@@ -1,10 +1,7 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Effect, type Scope } from "effect";
+import { Effect } from "effect";
 
-import type {
-  ExecutionEnvironment,
-  ExecutionEnvProviderError,
-} from "../execution/ExecutionEnvProvider";
+import type { ExecutionEnvironment } from "../execution/ExecutionEnvProvider";
 import type { CredentialResolverShape } from "../model/credentials";
 import type {
   HarnessCredentialCallback,
@@ -12,8 +9,7 @@ import type {
 } from "./optionsTypes";
 import { makeHarnessSystemPromptCallback } from "./systemPromptCallback";
 
-interface MakeOptionsFromEnvironmentInput
-  extends Omit<MakeAgentHarnessOptionsInput, "execution"> {
+interface MakeOptionsFromEnvironmentInput extends MakeAgentHarnessOptionsInput {
   readonly environment: ExecutionEnvironment;
 }
 
@@ -24,24 +20,6 @@ const credentialCallback =
     model: Parameters<HarnessCredentialCallback>[0],
   ): ReturnType<HarnessCredentialCallback> =>
     Effect.runPromise(credentials.getApiKeyAndHeaders(model));
-
-export const makeAgentHarnessOptions: (
-  input: MakeAgentHarnessOptionsInput,
-) => Effect.Effect<
-  PiAgent.AgentHarnessOptions,
-  ExecutionEnvProviderError,
-  Scope.Scope
-> = Effect.fnUntraced(function* (input) {
-  const environment = yield* input.execution.provider.create(
-    input.execution.request,
-  );
-  yield* Effect.addFinalizer(() => environment.cleanup);
-
-  return makeAgentHarnessOptionsFromEnvironment({
-    ...input,
-    environment,
-  });
-});
 
 export const makeAgentHarnessOptionsFromEnvironment = (
   input: MakeOptionsFromEnvironmentInput,

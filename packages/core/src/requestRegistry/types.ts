@@ -37,6 +37,7 @@ export interface PendingRequestRegistryOptions<
   readonly rejectOnShutdown: (
     request: Request,
   ) => PendingRequestFailure<Failure, Event>;
+  readonly snapshotRequest?: (request: Request) => Request;
 }
 
 export interface PendingRequestRegistry<

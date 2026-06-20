@@ -12,15 +12,20 @@ import type {
 } from "./PathGuardTypes";
 import { resolveWriteTarget } from "./writeTarget";
 
-export type * from "./PathGuardTypes";
+type PathGuardLayer = Layer.Layer<
+  PathGuard,
+  PlatformError,
+  EffectPath.Path | PermissionService
+>;
+
+const defaultTargetKind = (): Effect.Effect<PathGuardTargetKind> =>
+  Effect.succeed("file");
 
 const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
   const permission = yield* PermissionService;
   const pathService = yield* EffectPath.Path;
   const roots = yield* Effect.forEach(config.roots, config.canonicalize);
-  const getTargetKind =
-    config.getTargetKind ??
-    ((): Effect.Effect<PathGuardTargetKind> => Effect.succeed("file"));
+  const getTargetKind = config.getTargetKind ?? defaultTargetKind;
   const authorizeCanonical = (
     canonicalPath: string,
     options: PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind },
@@ -70,6 +75,7 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
       path,
       pathExists: config.pathExists,
       pathService,
+      readLink: config.readLink,
     });
     return yield* authorizeCanonical(
       target,
@@ -87,13 +93,7 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
 export class PathGuard extends Context.Service<PathGuard, PathGuardShape>()(
   "@hena-dev/core/PathGuard",
 ) {
-  static layer(
-    config: PathGuardConfig,
-  ): Layer.Layer<
-    PathGuard,
-    PlatformError,
-    EffectPath.Path | PermissionService
-  > {
+  static layer(config: PathGuardConfig): PathGuardLayer {
     return Layer.effect(PathGuard)(makePathGuard(config));
   }
 }

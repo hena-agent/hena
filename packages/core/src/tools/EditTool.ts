@@ -17,6 +17,7 @@ import {
   makeServiceExecuteAgentTool,
   type ToolShape,
 } from "./serviceAgentTool";
+import { ToolInputError } from "./toolErrors";
 import { resolvePath, ToolWorkspace } from "./workspace";
 
 export type EditToolShape = ToolShape<EditToolInput, EditToolDetails>;
@@ -39,10 +40,14 @@ const makeEditTool = Effect.fnUntraced(function* () {
         workspace.cwd,
         params.filePath,
       );
-      const authorization = yield* pathGuard.authorize(
-        requested,
-        tool === undefined ? undefined : { tool },
-      );
+      const authorization = yield* pathGuard.authorizeExistingPath(requested, {
+        ...(tool === undefined ? {} : { tool }),
+      });
+      if (authorization.kind !== "file") {
+        return yield* Effect.fail(
+          new ToolInputError({ message: "Path to edit must be a file." }),
+        );
+      }
       const current = yield* fs.readFileString(authorization.canonicalPath);
       const edit = yield* editContent(
         current,

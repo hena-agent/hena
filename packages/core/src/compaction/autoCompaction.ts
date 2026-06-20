@@ -78,9 +78,9 @@ export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
   };
 };
 
-export const autoCompactAfterTurn: <Error>(
-  input: AutoCompactionInput<Error>,
-) => Effect.Effect<AutoCompactionResult, Error> = Effect.fnUntraced(
+export const autoCompactAfterTurn: <E>(
+  input: AutoCompactionInput<E>,
+) => Effect.Effect<AutoCompactionResult, E> = Effect.fnUntraced(
   function* (input) {
     const usage = getContextUsage(input);
     if (!usage.overflow) {

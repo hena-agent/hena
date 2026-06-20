@@ -3,6 +3,7 @@ import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { EditTool, makeEditAgentTool } from "./EditTool";
+import { ToolInputError } from "./toolErrors";
 import { ToolWorkspace } from "./workspace";
 
 const pathGuard = Layer.succeed(PathGuard)({
@@ -176,12 +177,14 @@ it.effect("resolves relative edit paths from the tool workspace", () => {
         },
         authorizeCreateFile: (path) =>
           Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
-        authorizeExistingPath: (path) =>
-          Effect.succeed({
+        authorizeExistingPath: (path) => {
+          authorized.push(path);
+          return Effect.succeed({
             canonicalPath: path,
             allowedBy: "workspace",
             kind: "file",
-          }),
+          });
+        },
       }),
     ),
     Effect.provide(
@@ -192,6 +195,42 @@ it.effect("resolves relative edit paths from the tool workspace", () => {
     ),
   );
 });
+
+it.effect("rejects edit targets that are not files", () =>
+  Effect.gen(function* () {
+    const tool = yield* EditTool;
+    const error = yield* tool
+      .execute({
+        filePath: "/workspace/src",
+        oldString: "before",
+        newString: "after",
+      })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
+  }).pipe(
+    Effect.provide(EditTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "directory",
+          }),
+      }),
+    ),
+    Effect.provide(
+      FileSystem.layerNoop({ readFileString: () => Effect.die("") }),
+    ),
+  ),
+);
 
 it("adapts EditTool to a pi AgentTool", async () => {
   const tool = makeEditAgentTool(

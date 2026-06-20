@@ -4,10 +4,10 @@ import * as PiAi from "@earendil-works/pi-ai";
 import { assert, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
-import { makeLocalExecutionEnvProvider } from "../execution/ExecutionEnvProvider";
+import type { ExecutionEnvironment } from "../execution/ExecutionEnvProvider";
 import { makeCredentialResolver } from "../model/credentials";
 import { makeAgentTool } from "../tools/schema";
-import { makeAgentHarnessOptions } from "./options";
+import { makeAgentHarnessOptionsFromEnvironment } from "./options";
 
 const model = PiAi.getModel("openai", "gpt-4o-mini");
 const EmptyParams = Schema.Struct({});
@@ -26,11 +26,19 @@ const makeSession = (): Effect.Effect<PiAgent.Session> =>
     return session;
   });
 
+const makeEnvironment = (cwd: string): ExecutionEnvironment => ({
+  cwd,
+  roots: [cwd],
+  env: new PiNode.NodeExecutionEnv({ cwd }),
+  cleanup: Effect.void,
+});
+
 it.effect("assembles pi AgentHarnessOptions from core services", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const cwd = process.cwd();
       const session = yield* makeSession();
+      const environment = makeEnvironment(cwd);
       const tool = makeAgentTool<typeof EmptyParams, Record<string, never>>({
         label: "Echo",
         name: "echo",
@@ -38,11 +46,8 @@ it.effect("assembles pi AgentHarnessOptions from core services", () =>
         parameters: EmptyParams,
         execute: () => Effect.succeed({ content: [], details: {} }),
       });
-      const options = yield* makeAgentHarnessOptions({
-        execution: {
-          provider: makeLocalExecutionEnvProvider(),
-          request: { sessionID: "ses", cwd, roots: [cwd] },
-        },
+      const options = makeAgentHarnessOptionsFromEnvironment({
+        environment,
         session,
         model,
         thinkingLevel: "minimal",
@@ -117,11 +122,8 @@ it.effect(
       Effect.gen(function* () {
         const cwd = process.cwd();
         const session = yield* makeSession();
-        const options = yield* makeAgentHarnessOptions({
-          execution: {
-            provider: makeLocalExecutionEnvProvider(),
-            request: { sessionID: "ses", cwd, roots: [] },
-          },
+        const options = makeAgentHarnessOptionsFromEnvironment({
+          environment: makeEnvironment(cwd),
           session,
           model,
         });
@@ -153,37 +155,4 @@ it.effect(
         }
       }),
     ),
-);
-
-it.effect(
-  "cleans up acquired execution environments when the scope closes",
-  () =>
-    Effect.gen(function* () {
-      let cleaned = false;
-      const cwd = process.cwd();
-      const session = yield* makeSession();
-
-      yield* Effect.scoped(
-        makeAgentHarnessOptions({
-          execution: {
-            provider: {
-              create: () =>
-                Effect.succeed({
-                  cwd,
-                  roots: [cwd],
-                  env: new PiNode.NodeExecutionEnv({ cwd }),
-                  cleanup: Effect.sync(() => {
-                    cleaned = true;
-                  }),
-                }),
-            },
-            request: { sessionID: "ses", cwd, roots: [cwd] },
-          },
-          session,
-          model,
-        }),
-      );
-
-      assert.strictEqual(cleaned, true);
-    }),
 );

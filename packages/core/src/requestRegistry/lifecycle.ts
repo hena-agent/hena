@@ -1,6 +1,11 @@
 import { Deferred, Effect, PubSub } from "effect";
 
-import { type PendingRequestStore, publish, rejectEntries } from "./store";
+import {
+  type PendingRequestStore,
+  publish,
+  rejectEntries,
+  snapshotRequest,
+} from "./store";
 
 export const listRequests = <
   Input,
@@ -12,7 +17,9 @@ export const listRequests = <
   store: PendingRequestStore<Input, Request, Value, Failure, Event>,
 ): Effect.Effect<ReadonlyArray<Request>> =>
   Effect.sync(() =>
-    Array.from(store.pending.values(), (entry) => entry.request),
+    Array.from(store.pending.values(), (entry) =>
+      snapshotRequest(store, entry.request),
+    ),
   );
 
 const rejectInterrupted = <
@@ -61,7 +68,8 @@ export const askPendingRequest = Effect.fnUntraced(function* <
     return yield* Effect.fail(store.options.rejectOnShutdown(request).failure);
   }
 
-  return yield* publish(store, store.options.askedEvent(request)).pipe(
+  const eventRequest = snapshotRequest(store, request);
+  return yield* publish(store, store.options.askedEvent(eventRequest)).pipe(
     Effect.andThen(Deferred.await(deferred)),
     Effect.onInterrupt(() => rejectInterrupted(store, id)),
     Effect.ensuring(Effect.sync(() => store.pending.delete(id))),

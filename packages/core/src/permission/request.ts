@@ -23,6 +23,23 @@ export const makeRequest = (
   return input.tool === undefined ? request : { ...request, tool: input.tool };
 };
 
+export const snapshotPermissionRequest = (
+  request: PermissionRequest,
+): PermissionRequest => {
+  const snapshot = {
+    id: request.id,
+    sessionID: request.sessionID,
+    permission: request.permission,
+    patterns: [...request.patterns],
+    always: [...request.always],
+    metadata: { ...request.metadata },
+  } satisfies PermissionRequest;
+
+  return request.tool === undefined
+    ? snapshot
+    : { ...snapshot, tool: request.tool };
+};
+
 export const isAlwaysGranted = (
   alwaysGranted: ReadonlySet<string>,
   input: PermissionAskInput,

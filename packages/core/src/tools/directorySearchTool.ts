@@ -1,11 +1,9 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Effect, type Path as EffectPath, type FileSystem } from "effect";
 
-import type { PathGuardShape } from "../path/PathGuard";
-import type {
-  FileSearchAuthorize,
-  FileSearchTargetKind,
-} from "./fileSearchTypes";
+import type { PathGuardShape } from "../path/PathGuardTypes";
+import { makeDirectorySearchAuthorize } from "./directorySearchAuthorization";
+import type { FileSearchAuthorize } from "./fileSearchTypes";
 import type { ToolInvocationContext } from "./schema";
 import { type ToolExecutionError, toolReferenceFromContext } from "./schema";
 import { resolvePath, type ToolWorkspaceConfig } from "./workspace";
@@ -51,14 +49,13 @@ export const executeDirectorySearch = Effect.fnUntraced(function* <
     kind: "directory",
     ...(tool === undefined ? {} : { tool }),
   });
-  const authorize: FileSearchAuthorize = (
-    path: string,
-    kind: FileSearchTargetKind,
-  ) =>
-    pathGuard.authorize(path, {
-      kind,
-      ...(tool === undefined ? {} : { tool }),
-    });
+  const authorize = makeDirectorySearchAuthorize({
+    fs,
+    pathGuard,
+    pathService,
+    root: authorization.canonicalPath,
+    tool,
+  });
   return yield* search({
     authorize,
     fs,

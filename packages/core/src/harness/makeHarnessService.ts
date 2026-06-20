@@ -48,6 +48,8 @@ export const makeHarnessService: (
       run: () => PromiseLike<A>,
     ): Effect.Effect<A, HarnessServiceError> =>
       nonAbortableStructural(semaphore, run);
+    const read = <A>(run: () => A): Effect.Effect<A> =>
+      semaphore.withPermit(runSync(run));
 
     return {
       prompt: (...args: Args<"prompt">) =>
@@ -67,28 +69,28 @@ export const makeHarnessService: (
         mutate(harness.compact.bind(harness, instructions)),
       navigateTree: (...args: Args<"navigateTree">) =>
         mutate(harness.navigateTree.bind(harness, ...args)),
-      getModel: () => runSync(harness.getModel.bind(harness)),
+      getModel: () => read(harness.getModel.bind(harness)),
       setModel: (...args: Args<"setModel">) =>
         mutate(harness.setModel.bind(harness, ...args)),
-      getThinkingLevel: () => runSync(harness.getThinkingLevel.bind(harness)),
+      getThinkingLevel: () => read(harness.getThinkingLevel.bind(harness)),
       setThinkingLevel: (...args: Args<"setThinkingLevel">) =>
         mutate(harness.setThinkingLevel.bind(harness, ...args)),
-      getTools: () => runSync(harness.getTools.bind(harness)),
+      getTools: () => read(harness.getTools.bind(harness)),
       setTools: (...args: Args<"setTools">) =>
         mutate(harness.setTools.bind(harness, ...args)),
-      getActiveTools: () => runSync(harness.getActiveTools.bind(harness)),
+      getActiveTools: () => read(harness.getActiveTools.bind(harness)),
       setActiveTools: (...args: Args<"setActiveTools">) =>
         mutate(harness.setActiveTools.bind(harness, ...args)),
-      getSteeringMode: () => runSync(harness.getSteeringMode.bind(harness)),
+      getSteeringMode: () => read(harness.getSteeringMode.bind(harness)),
       setSteeringMode: (...args: Args<"setSteeringMode">) =>
         mutate(harness.setSteeringMode.bind(harness, ...args)),
-      getFollowUpMode: () => runSync(harness.getFollowUpMode.bind(harness)),
+      getFollowUpMode: () => read(harness.getFollowUpMode.bind(harness)),
       setFollowUpMode: (...args: Args<"setFollowUpMode">) =>
         mutate(harness.setFollowUpMode.bind(harness, ...args)),
-      getResources: () => runSync(harness.getResources.bind(harness)),
+      getResources: () => read(harness.getResources.bind(harness)),
       setResources: (...args: Args<"setResources">) =>
         mutate(harness.setResources.bind(harness, ...args)),
-      getStreamOptions: () => runSync(harness.getStreamOptions.bind(harness)),
+      getStreamOptions: () => read(harness.getStreamOptions.bind(harness)),
       setStreamOptions: (...args: Args<"setStreamOptions">) =>
         mutate(harness.setStreamOptions.bind(harness, ...args)),
       switchModel: makeSwitchModelOperation(semaphore, harness),

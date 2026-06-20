@@ -27,15 +27,15 @@ export interface ContextUsage {
   readonly usable: number;
 }
 
-export interface AutoCompactionRuntime<Error = never> {
+export interface AutoCompactionRuntime<E = never> {
   readonly compact: (
     instructions?: string,
-  ) => Effect.Effect<PiAgent.CompactResult, Error>;
+  ) => Effect.Effect<PiAgent.CompactResult, E>;
 }
 
-export interface AutoCompactionInput<Error = never> extends ContextUsageInput {
+export interface AutoCompactionInput<E = never> extends ContextUsageInput {
   readonly instructions?: string;
-  readonly runtime: AutoCompactionRuntime<Error>;
+  readonly runtime: AutoCompactionRuntime<E>;
 }
 
 export type AutoCompactionResult =

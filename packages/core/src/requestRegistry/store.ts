@@ -49,6 +49,17 @@ export const publish = <Event>(
 ): Effect.Effect<void> =>
   PubSub.publish(store.events, event).pipe(Effect.asVoid);
 
+export const snapshotRequest = <
+  Input,
+  Request extends { readonly id: string },
+  Value,
+  Failure,
+  Event,
+>(
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
+  request: Request,
+): Request => store.options.snapshotRequest?.(request) ?? request;
+
 export const publishSettlement = <Event>(
   store: { readonly events: PubSub.PubSub<Event> },
   settlement: PendingRequestSettlement<Event>,

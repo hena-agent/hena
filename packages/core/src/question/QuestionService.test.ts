@@ -167,7 +167,11 @@ it.effect("snapshots question request inputs", () =>
     };
     const questions = [question];
     const fiber = yield* service
-      .ask({ sessionID: "session-1", questions })
+      .ask({
+        sessionID: "session-1",
+        questions,
+        tool: { callID: "call-question" },
+      })
       .pipe(Effect.forkDetach({ startImmediately: true }));
 
     question.question = "Mutated?";
@@ -188,8 +192,104 @@ it.effect("snapshots question request inputs", () =>
         multiple: false,
       },
     ]);
+    assert.strictEqual(pending.tool?.callID, "call-question");
 
     yield* service.reject(pending.id);
     yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(Effect.provide(QuestionService.Live)),
+);
+
+it.effect("snapshots exposed pending question requests and asked events", () =>
+  Effect.gen(function* () {
+    const service = yield* QuestionService;
+    const eventsFiber = yield* service.events.pipe(
+      Stream.take(1),
+      Stream.runCollect,
+      Effect.forkDetach({ startImmediately: true }),
+    );
+    const fiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        questions: [
+          {
+            question: "Continue?",
+            header: "Continue",
+            options: [{ label: "Yes", description: "Continue" }],
+            custom: true,
+          },
+        ],
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [pending] = yield* service.list();
+    if (pending === undefined) {
+      throw new Error("expected a pending question request");
+    }
+    const [question] = pending.questions;
+    const [option] = question?.options ?? [];
+    if (question === undefined || option === undefined) {
+      throw new Error("expected question option");
+    }
+    Object.assign(question, { question: "Mutated?" });
+    Object.assign(option, { label: "No" });
+
+    const [freshPending] = yield* service.list();
+    assert.strictEqual(freshPending?.questions[0]?.question, "Continue?");
+    assert.strictEqual(freshPending?.questions[0]?.options[0]?.label, "Yes");
+
+    const events = yield* Fiber.join(eventsFiber);
+    const [event] = events;
+    if (event?.type !== "question.asked") {
+      throw new Error("expected asked event");
+    }
+    assert.strictEqual(event.request.questions[0]?.question, "Continue?");
+    assert.strictEqual(event.request.questions[0]?.options[0]?.label, "Yes");
+
+    yield* service.reject(pending.id);
+    yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(Effect.provide(QuestionService.Live)),
+);
+
+it.effect("snapshots question replies", () =>
+  Effect.gen(function* () {
+    const service = yield* QuestionService;
+    const eventsFiber = yield* service.events.pipe(
+      Stream.take(2),
+      Stream.runCollect,
+      Effect.forkDetach({ startImmediately: true }),
+    );
+    const fiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        questions: [
+          {
+            question: "Continue?",
+            header: "Continue",
+            options: [{ label: "Yes", description: "Continue" }],
+            custom: true,
+          },
+        ],
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [pending] = yield* service.list();
+    if (pending === undefined) {
+      throw new Error("expected a pending question request");
+    }
+    const selected = ["Yes"];
+    const answers = [selected];
+    yield* service.reply({ requestID: pending.id, answers });
+    selected.push("Mutated");
+    answers.push(["No"]);
+
+    assert.deepStrictEqual(yield* Fiber.join(fiber), [["Yes"]]);
+    const events = yield* Fiber.join(eventsFiber);
+    const replied = events[1];
+    if (replied?.type !== "question.replied") {
+      throw new Error("expected replied event");
+    }
+    assert.deepStrictEqual(replied.reply.answers, [["Yes"]]);
   }).pipe(Effect.provide(QuestionService.Live)),
 );

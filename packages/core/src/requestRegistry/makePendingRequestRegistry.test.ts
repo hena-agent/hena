@@ -15,9 +15,19 @@ interface Request {
   readonly label: string;
 }
 
+interface SnapshotRequest {
+  readonly id: string;
+  labels: Array<string>;
+  metadata: { value: string };
+}
+
 type Event =
   | { readonly type: "asked"; readonly request: Request }
   | { readonly type: "resolved"; readonly requestID: string }
+  | { readonly type: "rejected"; readonly requestID: string };
+
+type SnapshotEvent =
+  | { readonly type: "asked"; readonly request: SnapshotRequest }
   | { readonly type: "rejected"; readonly requestID: string };
 
 const registryOptions: PendingRequestRegistryOptions<
@@ -307,6 +317,75 @@ it.effect("does not reject interrupted waiters after settlement claims", () =>
         (yield* Fiber.join(eventsFiber)).map((event) => event.type),
         ["asked", "resolved"],
       );
+    }),
+  ),
+);
+
+it.effect("snapshots listed requests and asked events when configured", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makePendingRequestRegistry<
+        Input,
+        SnapshotRequest,
+        string,
+        string,
+        SnapshotEvent
+      >({
+        idPrefix: "req",
+        makeRequest: (id, input) => ({
+          id,
+          labels: [input.label],
+          metadata: { value: input.label },
+        }),
+        snapshotRequest: (request) => ({
+          id: request.id,
+          labels: [...request.labels],
+          metadata: { ...request.metadata },
+        }),
+        askedEvent: (request) => ({ type: "asked", request }),
+        rejectOnShutdown: (request) => ({
+          failure: "closed",
+          event: { type: "rejected", requestID: request.id },
+        }),
+      });
+      const eventsFiber = yield* registry.events.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkDetach({ startImmediately: true }),
+      );
+      const waiter = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const events = yield* Fiber.join(eventsFiber);
+      const [pending] = yield* registry.list();
+      if (pending === undefined) {
+        throw new Error("expected a pending request");
+      }
+      pending.labels.push("mutated");
+      pending.metadata.value = "mutated";
+
+      assert.deepStrictEqual(yield* registry.list(), [
+        { id: "req-0", labels: ["wait"], metadata: { value: "wait" } },
+      ]);
+      const [event] = events;
+      if (event?.type !== "asked") {
+        throw new Error("expected asked event");
+      }
+      assert.deepStrictEqual(event.request, {
+        id: "req-0",
+        labels: ["wait"],
+        metadata: { value: "wait" },
+      });
+
+      yield* registry.fail("req-0", "missing", () =>
+        Effect.succeed({
+          failure: "rejected",
+          event: { type: "rejected", requestID: "req-0" },
+        }),
+      );
+      yield* Fiber.join(waiter).pipe(Effect.exit);
     }),
   ),
 );

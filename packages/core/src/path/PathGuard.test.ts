@@ -1,5 +1,6 @@
 import { assert, it } from "@effect/vitest";
 import { Effect, Path as EffectPath, Fiber, Layer } from "effect";
+import { systemError } from "effect/PlatformError";
 
 import { PermissionService } from "../permission/PermissionService";
 import { PathGuard } from "./PathGuard";
@@ -7,12 +8,23 @@ import { PathGuard } from "./PathGuard";
 const canonicalize = (path: string): Effect.Effect<string> =>
   Effect.succeed(path);
 
+const notSymlink = (path: string) =>
+  Effect.fail(
+    systemError({
+      _tag: "NotFound",
+      module: "FileSystem",
+      method: "readLink",
+      pathOrDescriptor: path,
+    }),
+  );
+
 const providePathGuard = (roots: ReadonlyArray<string>) =>
   PathGuard.layer({
     sessionID: "session-1",
     roots,
     canonicalize,
     pathExists: () => Effect.succeed(false),
+    readLink: notSymlink,
   }).pipe(
     Layer.provideMerge(PermissionService.Live),
     Layer.provideMerge(EffectPath.layer),
@@ -131,6 +143,7 @@ it.effect(
               path === "/workspace/link/secret.txt" ? "/secret.txt" : path,
             ),
           pathExists: () => Effect.succeed(false),
+          readLink: notSymlink,
         }).pipe(
           Layer.provideMerge(PermissionService.Live),
           Layer.provideMerge(EffectPath.layer),
@@ -156,6 +169,7 @@ it.effect("detects kind inside the existing-path authorization boundary", () =>
         roots: ["/workspace"],
         canonicalize,
         pathExists: () => Effect.succeed(false),
+        readLink: notSymlink,
         getTargetKind: () => Effect.succeed("directory"),
       }).pipe(
         Layer.provideMerge(PermissionService.Live),
@@ -201,6 +215,7 @@ it.effect(
               path === "/workspace/link" ? "/workspace/real" : path,
             ),
           pathExists: () => Effect.succeed(false),
+          readLink: notSymlink,
         }).pipe(
           Layer.provideMerge(PermissionService.Live),
           Layer.provideMerge(EffectPath.layer),
@@ -240,10 +255,85 @@ it.effect("authorizes existing write targets by canonicalizing the leaf", () =>
             path === "/workspace/link.txt" ? "/outside/secret.txt" : path,
           ),
         pathExists: (path) => Effect.succeed(path === "/workspace/link.txt"),
+        readLink: notSymlink,
       }).pipe(
         Layer.provideMerge(PermissionService.Live),
         Layer.provideMerge(EffectPath.layer),
       ),
     ),
   ),
+);
+
+it.effect(
+  "authorizes dangling symlink write targets by resolving the link target",
+  () =>
+    Effect.gen(function* () {
+      const guard = yield* PathGuard;
+      const permissions = yield* PermissionService;
+      const fiber = yield* guard
+        .authorizeCreateFile("/workspace/link.txt")
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const [request] = yield* permissions.list();
+      if (request === undefined) {
+        throw new Error("expected a pending permission request");
+      }
+
+      assert.deepStrictEqual(request.metadata, {
+        filepath: "/outside/new.txt",
+        parentDir: "/outside",
+      });
+
+      yield* permissions.deny({ requestID: request.id, message: "No" });
+      yield* Fiber.join(fiber).pipe(Effect.exit);
+    }).pipe(
+      Effect.provide(
+        PathGuard.layer({
+          sessionID: "session-1",
+          roots: ["/workspace"],
+          canonicalize,
+          pathExists: () => Effect.succeed(false),
+          readLink: (path) =>
+            path === "/workspace/link.txt"
+              ? Effect.succeed("../outside/new.txt")
+              : notSymlink(path),
+        }).pipe(
+          Layer.provideMerge(PermissionService.Live),
+          Layer.provideMerge(EffectPath.layer),
+        ),
+      ),
+    ),
+);
+
+it.effect(
+  "authorizes dangling symlink write targets with absolute targets",
+  () =>
+    Effect.gen(function* () {
+      const guard = yield* PathGuard;
+      const authorization = yield* guard.authorizeCreateFile(
+        "/workspace/link.txt",
+      );
+
+      assert.deepStrictEqual(authorization, {
+        canonicalPath: "/workspace/target.txt",
+        allowedBy: "workspace",
+      });
+    }).pipe(
+      Effect.provide(
+        PathGuard.layer({
+          sessionID: "session-1",
+          roots: ["/workspace"],
+          canonicalize,
+          pathExists: () => Effect.succeed(false),
+          readLink: (path) =>
+            path === "/workspace/link.txt"
+              ? Effect.succeed("/workspace/target.txt")
+              : notSymlink(path),
+        }).pipe(
+          Layer.provideMerge(PermissionService.Live),
+          Layer.provideMerge(EffectPath.layer),
+        ),
+      ),
+    ),
 );

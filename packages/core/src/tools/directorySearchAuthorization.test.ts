@@ -1,0 +1,102 @@
+import { assert, it } from "@effect/vitest";
+import { Effect, Path as EffectPath, FileSystem, Layer } from "effect";
+
+import { PathGuard } from "../path/PathGuard";
+import { makeDirectorySearchAuthorize } from "./directorySearchAuthorization";
+
+it.effect(
+  "scopes descendant search authorization to authorized directories",
+  () => {
+    const authorized: Array<string> = [];
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const pathService = yield* EffectPath.Path;
+      const pathGuard = yield* PathGuard;
+      const authorize = makeDirectorySearchAuthorize({
+        fs,
+        pathGuard,
+        pathService,
+        root: "/workspace",
+      });
+
+      yield* authorize("/workspace/a.ts", "file");
+      yield* authorize("/workspace/link", "directory");
+      yield* authorize("/external/secret.ts", "file");
+
+      assert.deepStrictEqual(authorized, ["directory:/external"]);
+    }).pipe(
+      Effect.provide(EffectPath.layer),
+      Effect.provide(
+        FileSystem.layerNoop({
+          realPath: (path) =>
+            Effect.succeed(path === "/workspace/link" ? "/external" : path),
+        }),
+      ),
+      Effect.provide(
+        Layer.succeed(PathGuard)({
+          authorize: (path, options) =>
+            Effect.sync(() => {
+              authorized.push(`${options?.kind ?? "file"}:${path}`);
+              return { canonicalPath: path, allowedBy: "permission" };
+            }),
+          authorizeCreateFile: (path) =>
+            Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+          authorizeExistingPath: (path) =>
+            Effect.succeed({
+              canonicalPath: path,
+              allowedBy: "workspace",
+              kind: "file",
+            }),
+        }),
+      ),
+    );
+  },
+);
+
+it.effect("passes tool refs when authorizing file escapes", () => {
+  const authorized: Array<string> = [];
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const pathGuard = yield* PathGuard;
+    const authorize = makeDirectorySearchAuthorize({
+      fs,
+      pathGuard,
+      pathService,
+      root: "/workspace",
+      tool: { callID: "call-search" },
+    });
+
+    yield* authorize("/workspace/link-file", "file");
+
+    assert.deepStrictEqual(authorized, [
+      "file:/external/secret.ts:call-search",
+    ]);
+  }).pipe(
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      FileSystem.layerNoop({
+        realPath: () => Effect.succeed("/external/secret.ts"),
+      }),
+    ),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path, options) =>
+          Effect.sync(() => {
+            authorized.push(
+              `${options?.kind ?? "file"}:${path}:${options?.tool?.callID ?? ""}`,
+            );
+            return { canonicalPath: path, allowedBy: "permission" };
+          }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          }),
+      }),
+    ),
+  );
+});

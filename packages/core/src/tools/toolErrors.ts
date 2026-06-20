@@ -1,7 +1,7 @@
 import { Schema } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
-import type { PathGuardError } from "../path/PathGuard";
+import type { PathGuardError } from "../path/PathGuardTypes";
 import type { QuestionRejectedError } from "../question/schema";
 
 export class ToolInputError extends Schema.TaggedErrorClass<ToolInputError>()(

@@ -5,13 +5,13 @@ import type { PendingRequestFailure } from "../requestRegistry/types";
 import { validateReply } from "./replyValidation";
 import {
   type Answer,
-  type Info,
   type QuestionEvent,
   QuestionRejectedError,
   QuestionRequestNotFound,
   type Reply,
   type Request,
 } from "./schema";
+import { snapshotQuestion, snapshotReply, snapshotRequest } from "./snapshots";
 import type { AskInput, QuestionServiceShape } from "./types";
 
 const rejectQuestion = (
@@ -19,14 +19,6 @@ const rejectQuestion = (
 ): PendingRequestFailure<QuestionRejectedError, QuestionEvent> => ({
   failure: new QuestionRejectedError({}),
   event: { type: "question.rejected", requestID: request.id },
-});
-
-const snapshotQuestion = (question: Info): Info => ({
-  question: question.question,
-  header: question.header,
-  options: question.options.map((option) => ({ ...option })),
-  custom: question.custom,
-  ...(question.multiple === undefined ? {} : { multiple: question.multiple }),
 });
 
 const makeQuestionService = Effect.fnUntraced(function* () {
@@ -44,6 +36,7 @@ const makeQuestionService = Effect.fnUntraced(function* () {
       questions: input.questions.map(snapshotQuestion),
       tool: input.tool,
     }),
+    snapshotRequest,
     askedEvent: (request: Request): QuestionEvent => ({
       type: "question.asked",
       request,
@@ -55,14 +48,15 @@ const makeQuestionService = Effect.fnUntraced(function* () {
     new QuestionRequestNotFound({ requestID });
 
   const reply = Effect.fnUntraced(function* (input: Reply) {
+    const replySnapshot = snapshotReply(input);
     yield* registry.succeed(
-      input.requestID,
-      notFound(input.requestID),
+      replySnapshot.requestID,
+      notFound(replySnapshot.requestID),
       (request) =>
-        validateReply(request, input).pipe(
+        validateReply(request, replySnapshot).pipe(
           Effect.as({
-            value: input.answers,
-            event: { type: "question.replied", reply: input },
+            value: replySnapshot.answers,
+            event: { type: "question.replied", reply: replySnapshot },
           }),
         ),
     );

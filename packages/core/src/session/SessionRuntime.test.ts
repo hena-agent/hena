@@ -5,6 +5,7 @@ import { assert, it } from "@effect/vitest";
 import { Effect, Path as EffectPath, FileSystem, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 
+import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import {
   ExecutionEnvProvider,
   type ExecutionEnvRequest,
@@ -109,6 +110,7 @@ interface TestState {
   readonly files?: ReadonlyMap<string, string>;
   cleanups: number;
   creates: number;
+  readonly loadedSessionID?: string;
   loads: number;
   options?: PiAgent.AgentHarnessOptions;
   request?: ExecutionEnvRequest;
@@ -123,7 +125,9 @@ const makeLayers = (state: TestState) =>
       load: (sessionID) =>
         Effect.gen(function* () {
           state.loads++;
-          const session = yield* makeSession(sessionID);
+          const session = yield* makeSession(
+            state.loadedSessionID ?? sessionID,
+          );
           return {
             cwd: "/repo",
             roots: state.roots ?? ["/repo"],
@@ -179,6 +183,14 @@ const readSession = (sessionID: string) =>
     const harness = yield* HarnessService;
     const currentModel = yield* harness.getModel();
     return { runtime, currentModel };
+  }).pipe(Effect.provide(SessionRuntimeMap.get(sessionID)));
+
+const readEnvironment = (sessionID: string) =>
+  Effect.gen(function* () {
+    const environment = yield* ExecutionEnvironmentService;
+    const harness = yield* HarnessService;
+    yield* harness.getModel();
+    return environment;
   }).pipe(Effect.provide(SessionRuntimeMap.get(sessionID)));
 
 it.effect("caches a session runtime until the idle TTL expires", () =>
@@ -252,6 +264,47 @@ it.effect("passes shell options into the execution environment request", () =>
   ),
 );
 
+it.effect("shares the execution environment with harness options", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const state: TestState = { loads: 0, creates: 0, cleanups: 0 };
+      const layer = SessionRuntimeMap.layer.pipe(
+        Layer.provide(makeLayers(state)),
+      );
+
+      const environment = yield* readEnvironment("ses_env").pipe(
+        Effect.provide(layer),
+      );
+
+      assert.strictEqual(state.options?.env, environment.env);
+    }),
+  ),
+);
+
+it.effect("rejects loader configs with mismatched session ids", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const state: TestState = {
+        loads: 0,
+        creates: 0,
+        cleanups: 0,
+        loadedSessionID: "ses_other",
+      };
+      const layer = SessionRuntimeMap.layer.pipe(
+        Layer.provide(makeLayers(state)),
+      );
+
+      const error = yield* readSession("ses_expected").pipe(
+        Effect.provide(layer),
+        Effect.flip,
+      );
+
+      assert.strictEqual(error._tag, "SessionRuntimeLoadError");
+      assert.strictEqual(state.creates, 0);
+    }),
+  ),
+);
+
 it.effect("normalizes runtime roots before wiring services", () =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -290,6 +343,8 @@ it.effect("detects runtime path guard target kinds from filesystem stat", () =>
       Layer.provideMerge(
         FileSystem.layerNoop({
           exists: (path) => Effect.succeed(path === "/repo/file.ts"),
+          readLink: (path) =>
+            Effect.succeed(path === "/repo/link.ts" ? "target.ts" : path),
           realPath: (path) => Effect.succeed(path),
           stat: (path) =>
             Effect.succeed(fileInfo(path === "/repo" ? "Directory" : "File")),
@@ -303,10 +358,12 @@ it.effect("detects runtime path guard target kinds from filesystem stat", () =>
       const directory = yield* guard.authorizeExistingPath("/repo");
       const file = yield* guard.authorizeExistingPath("/repo/file.ts");
       const writableFile = yield* guard.authorizeCreateFile("/repo/file.ts");
+      const writableLink = yield* guard.authorizeCreateFile("/repo/link.ts");
 
       assert.strictEqual(directory.kind, "directory");
       assert.strictEqual(file.kind, "file");
       assert.strictEqual(writableFile.canonicalPath, "/repo/file.ts");
+      assert.strictEqual(writableLink.canonicalPath, "/repo/target.ts");
     }).pipe(Effect.provide(layer));
   }),
 );

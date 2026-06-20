@@ -246,6 +246,13 @@ class FailingRollbackHarness extends FailingThinkingHarness {
   }
 }
 
+class GetterTrackingHarness extends FakeHarness {
+  override getModel(): PiAi.Model<PiAi.Api> {
+    this.calls.push("getModel");
+    return super.getModel();
+  }
+}
+
 it.effect("serializes structural harness operations", () =>
   Effect.gen(function* () {
     const harness = new FakeHarness();
@@ -273,6 +280,36 @@ it.effect("serializes structural harness operations", () =>
       "prompt:end:one",
       "compact:start",
       "compact:end",
+    ]);
+  }),
+);
+
+it.effect("serializes getters with structural harness operations", () =>
+  Effect.gen(function* () {
+    const harness = new GetterTrackingHarness();
+    const gate = makeGate();
+    harness.promptGate = gate.promise;
+    const service = yield* makeHarnessService(harness);
+
+    const promptFiber = yield* service
+      .prompt("one")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
+    const getterFiber = yield* service
+      .getModel()
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
+
+    assert.deepStrictEqual(harness.calls, ["prompt:start:one"]);
+
+    gate.open();
+    yield* Fiber.join(promptFiber);
+    yield* Fiber.join(getterFiber);
+
+    assert.deepStrictEqual(harness.calls, [
+      "prompt:start:one",
+      "prompt:end:one",
+      "getModel",
     ]);
   }),
 );

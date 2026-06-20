@@ -3,7 +3,11 @@ import { Context, Effect, Layer } from "effect";
 import { makePendingRequestRegistry } from "../requestRegistry/makePendingRequestRegistry";
 import { makeGrant } from "./grant";
 import { denyRequest, makeDeny } from "./lifecycle";
-import { isAlwaysGranted, makeRequest } from "./request";
+import {
+  isAlwaysGranted,
+  makeRequest,
+  snapshotPermissionRequest,
+} from "./request";
 import type {
   PermissionDeniedError,
   PermissionEvent,
@@ -28,6 +32,7 @@ const makePermissionService = Effect.fnUntraced(function* () {
   >({
     idPrefix: "per",
     makeRequest,
+    snapshotRequest: snapshotPermissionRequest,
     askedEvent: (request: PermissionRequest): PermissionEvent => ({
       type: "permission.asked",
       request,

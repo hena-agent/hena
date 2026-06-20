@@ -229,3 +229,46 @@ it.effect("snapshots permission request inputs", () =>
     yield* Fiber.join(fiber).pipe(Effect.exit);
   }).pipe(Effect.provide(PermissionService.Live)),
 );
+
+it.effect(
+  "snapshots exposed pending permission requests and asked events",
+  () =>
+    Effect.gen(function* () {
+      const service = yield* PermissionService;
+      const eventsFiber = yield* service.events.pipe(
+        Stream.take(1),
+        Stream.runCollect,
+        Effect.forkDetach({ startImmediately: true }),
+      );
+      const fiber = yield* service
+        .ask({
+          sessionID: "session-1",
+          permission: "external_directory",
+          patterns: ["/outside/*"],
+          always: ["/outside/*"],
+          metadata: { filepath: "/outside/file.txt" },
+        })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const events = yield* Fiber.join(eventsFiber);
+      const [pending] = yield* service.list();
+      if (pending === undefined) {
+        throw new Error("expected a pending permission request");
+      }
+      Object.assign(pending.metadata, { filepath: "/mutated/file.txt" });
+
+      const [freshPending] = yield* service.list();
+      assert.deepStrictEqual(freshPending?.metadata, {
+        filepath: "/outside/file.txt",
+      });
+      if (events[0]?.type === "permission.asked") {
+        assert.deepStrictEqual(events[0].request.metadata, {
+          filepath: "/outside/file.txt",
+        });
+      }
+
+      yield* service.deny({ requestID: pending.id });
+      yield* Fiber.join(fiber).pipe(Effect.exit);
+    }).pipe(Effect.provide(PermissionService.Live)),
+);

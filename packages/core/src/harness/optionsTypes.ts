@@ -1,9 +1,5 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 
-import type {
-  ExecutionEnvProviderShape,
-  ExecutionEnvRequest,
-} from "../execution/ExecutionEnvProvider";
 import type { CredentialResolverShape } from "../model/credentials";
 import type { HenaModel, HenaThinkingLevel } from "../model/types";
 import type { ProjectInstruction } from "../systemPrompt/systemPrompt";
@@ -25,15 +21,9 @@ export interface HarnessSystemPromptConfig {
   readonly projectInstructions?: ReadonlyArray<ProjectInstruction>;
 }
 
-export interface AgentHarnessExecutionConfig {
-  readonly provider: ExecutionEnvProviderShape;
-  readonly request: ExecutionEnvRequest;
-}
-
 export interface MakeAgentHarnessOptionsInput {
   readonly activeToolNames?: ReadonlyArray<string>;
   readonly credentials?: CredentialResolverShape;
-  readonly execution: AgentHarnessExecutionConfig;
   readonly model: HenaModel;
   readonly resources?: PiAgent.AgentHarnessResources;
   readonly session: PiAgent.Session;

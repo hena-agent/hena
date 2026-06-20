@@ -21,6 +21,7 @@ export const makeRuntimePathGuardLayer = (
         roots: config.roots,
         canonicalize: (path: string) => fs.realPath(path),
         pathExists: (path: string) => fs.exists(path),
+        readLink: (path: string) => fs.readLink(path),
         getTargetKind: (path: string) =>
           fs
             .stat(path)

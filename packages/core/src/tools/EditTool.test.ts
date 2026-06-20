@@ -1,5 +1,12 @@
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
+import {
+  Context,
+  Effect,
+  Path as EffectPath,
+  FileSystem,
+  Layer,
+  Option,
+} from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { EditTool, makeEditAgentTool } from "./EditTool";
@@ -20,6 +27,23 @@ const pathGuard = Layer.succeed(PathGuard)({
 });
 
 const workspace = ToolWorkspace.layer({ cwd: "/workspace" });
+
+const fileInfo = (size = FileSystem.Size(0)): FileSystem.File.Info => ({
+  type: "File",
+  mtime: Option.none(),
+  atime: Option.none(),
+  birthtime: Option.none(),
+  dev: 0,
+  ino: Option.none(),
+  mode: 0,
+  nlink: Option.none(),
+  uid: Option.none(),
+  gid: Option.none(),
+  rdev: Option.none(),
+  size,
+  blksize: Option.none(),
+  blocks: Option.none(),
+});
 
 it.effect(
   "replaces a unique exact string after PathGuard authorization",
@@ -56,6 +80,7 @@ it.effect(
       Effect.provide(EffectPath.layer),
       Effect.provide(
         FileSystem.layerNoop({
+          stat: () => Effect.succeed(fileInfo()),
           readFileString: () => Effect.succeed("const value = 1;\n"),
           writeFileString: (path, content) =>
             Effect.sync(() => {
@@ -92,6 +117,7 @@ it.effect(
       Effect.provide(EffectPath.layer),
       Effect.provide(
         FileSystem.layerNoop({
+          stat: () => Effect.succeed(fileInfo()),
           readFileString: () => Effect.succeed("foo\n"),
           writeFileString: (path, content) =>
             Effect.sync(() => {
@@ -122,6 +148,7 @@ it.effect("rejects ambiguous matches", () =>
     Effect.provide(EffectPath.layer),
     Effect.provide(
       FileSystem.layerNoop({
+        stat: () => Effect.succeed(fileInfo()),
         readFileString: () => Effect.succeed("same same"),
       }),
     ),
@@ -146,7 +173,10 @@ it.effect("rejects edits when the exact string is missing", () =>
     Effect.provide(workspace),
     Effect.provide(EffectPath.layer),
     Effect.provide(
-      FileSystem.layerNoop({ readFileString: () => Effect.succeed("present") }),
+      FileSystem.layerNoop({
+        stat: () => Effect.succeed(fileInfo()),
+        readFileString: () => Effect.succeed("present"),
+      }),
     ),
   ),
 );
@@ -189,6 +219,7 @@ it.effect("resolves relative edit paths from the tool workspace", () => {
     ),
     Effect.provide(
       FileSystem.layerNoop({
+        stat: () => Effect.succeed(fileInfo()),
         readFileString: () => Effect.succeed("before"),
         writeFileString: () => Effect.void,
       }),
@@ -231,6 +262,66 @@ it.effect("rejects edit targets that are not files", () =>
     ),
   ),
 );
+
+it.effect("rejects oversized edit targets before reading", () =>
+  Effect.gen(function* () {
+    const tool = yield* EditTool;
+    const error = yield* tool
+      .execute({
+        filePath: "/workspace/large.log",
+        oldString: "before",
+        newString: "after",
+      })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
+    assert.strictEqual(error.message, "File is too large to edit.");
+  }).pipe(
+    Effect.provide(EditTool.Live),
+    Effect.provide(pathGuard),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      FileSystem.layerNoop({
+        stat: () => Effect.succeed(fileInfo(FileSystem.MiB(2))),
+        readFileString: () => Effect.die("large file should not be read"),
+      }),
+    ),
+  ),
+);
+
+it.effect("rejects oversized edit results before writing", () => {
+  let wrote = false;
+  return Effect.gen(function* () {
+    const tool = yield* EditTool;
+    const error = yield* tool
+      .execute({
+        filePath: "/workspace/app.ts",
+        oldString: "small",
+        newString: "x".repeat(1024 * 1024 + 1),
+      })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
+    assert.strictEqual(error.message, "Edited file is too large to write.");
+    assert.strictEqual(wrote, false);
+  }).pipe(
+    Effect.provide(EditTool.Live),
+    Effect.provide(pathGuard),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      FileSystem.layerNoop({
+        stat: () => Effect.succeed(fileInfo()),
+        readFileString: () => Effect.succeed("small"),
+        writeFileString: () =>
+          Effect.sync(() => {
+            wrote = true;
+          }),
+      }),
+    ),
+  );
+});
 
 it("adapts EditTool to a pi AgentTool", async () => {
   const tool = makeEditAgentTool(

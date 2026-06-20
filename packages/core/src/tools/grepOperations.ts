@@ -1,8 +1,7 @@
 import { Effect, type FileSystem } from "effect";
 import type { PlatformError } from "effect/PlatformError";
-
 import { compileGlobEffect } from "./globMatch";
-import { readLineWindow } from "./readLineWindow";
+import { grepFileStream } from "./grepFileStream";
 import type { ToolInputError } from "./toolErrors";
 
 export interface GrepMatch {
@@ -38,19 +37,7 @@ export const grepFile: (
   limit: number,
 ) => Effect.Effect<GrepResult, PlatformError> = Effect.fnUntraced(
   function* (fs, pattern, file, limit) {
-    const window = yield* readLineWindow(fs, file, 1, Number.MAX_SAFE_INTEGER);
-    const matches: Array<GrepMatch> = [];
-    for (const [index, line] of window.lines.entries()) {
-      pattern.lastIndex = 0;
-      if (!pattern.test(line)) {
-        continue;
-      }
-      if (matches.length >= limit) {
-        return { matches, truncated: true };
-      }
-      matches.push({ path: file, line: index + 1, text: line });
-    }
-    return { matches, truncated: window.truncated };
+    return yield* grepFileStream(fs, pattern, file, limit);
   },
 );
 

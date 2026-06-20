@@ -166,17 +166,19 @@ it.effect("snapshots question request inputs", () =>
       multiple: false,
     };
     const questions = [question];
+    const tool = { callID: "call-question" };
     const fiber = yield* service
       .ask({
         sessionID: "session-1",
         questions,
-        tool: { callID: "call-question" },
+        tool,
       })
       .pipe(Effect.forkDetach({ startImmediately: true }));
 
     question.question = "Mutated?";
     option.label = "No";
     options.push({ label: "Maybe", description: "Mutated" });
+    tool.callID = "mutated";
     yield* Effect.yieldNow;
     const [pending] = yield* service.list();
     if (pending === undefined) {
@@ -218,6 +220,7 @@ it.effect("snapshots exposed pending question requests and asked events", () =>
             custom: true,
           },
         ],
+        tool: { callID: "call-question" },
       })
       .pipe(Effect.forkDetach({ startImmediately: true }));
 
@@ -233,10 +236,12 @@ it.effect("snapshots exposed pending question requests and asked events", () =>
     }
     Object.assign(question, { question: "Mutated?" });
     Object.assign(option, { label: "No" });
+    Object.assign(pending.tool ?? {}, { callID: "mutated" });
 
     const [freshPending] = yield* service.list();
     assert.strictEqual(freshPending?.questions[0]?.question, "Continue?");
     assert.strictEqual(freshPending?.questions[0]?.options[0]?.label, "Yes");
+    assert.strictEqual(freshPending?.tool?.callID, "call-question");
 
     const events = yield* Fiber.join(eventsFiber);
     const [event] = events;
@@ -245,6 +250,7 @@ it.effect("snapshots exposed pending question requests and asked events", () =>
     }
     assert.strictEqual(event.request.questions[0]?.question, "Continue?");
     assert.strictEqual(event.request.questions[0]?.options[0]?.label, "Yes");
+    assert.strictEqual(event.request.tool?.callID, "call-question");
 
     yield* service.reject(pending.id);
     yield* Fiber.join(fiber).pipe(Effect.exit);

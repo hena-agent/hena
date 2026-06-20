@@ -23,3 +23,27 @@ it("returns empty text when the cap cannot fit a complete code point", () => {
 
   assert.deepStrictEqual(result, { bytes: 2, text: "", truncated: true });
 });
+
+it("does not synthesize replacement characters for truncated emoji", () => {
+  const result = boundUtf8Text("😀", 3);
+
+  assert.deepStrictEqual(result, { bytes: 4, text: "", truncated: true });
+});
+
+it("handles three-byte UTF-8 truncation boundaries", () => {
+  const result = boundUtf8Text("€", 2);
+
+  assert.deepStrictEqual(result, { bytes: 3, text: "", truncated: true });
+});
+
+it("returns empty text for zero and negative byte caps", () => {
+  const result = boundUtf8Text("a", -1);
+
+  assert.deepStrictEqual(result, { bytes: 1, text: "", truncated: true });
+});
+
+it("drops invalid leading bytes at a truncation boundary", () => {
+  const result = decodeBoundedUtf8Bytes(new Uint8Array([0xff, 0x61]), 1);
+
+  assert.deepStrictEqual(result, { bytes: 2, text: "", truncated: true });
+});

@@ -7,6 +7,14 @@ import {
   type ExecutionEnvRequest,
 } from "./ExecutionEnvProvider";
 
+const serviceEnvironment = (
+  environment: ExecutionEnvironment,
+): ExecutionEnvironment => ({
+  cwd: environment.cwd,
+  env: environment.env,
+  roots: [...environment.roots],
+});
+
 export class ExecutionEnvironmentService extends Context.Service<
   ExecutionEnvironmentService,
   ExecutionEnvironment
@@ -23,6 +31,7 @@ export const makeExecutionEnvironmentLayer = (
     ExecutionEnvironmentService,
     Effect.gen(function* () {
       const provider = yield* ExecutionEnvProvider;
-      return yield* provider.create(request);
+      const environment = yield* provider.create(request);
+      return serviceEnvironment(environment);
     }),
   );

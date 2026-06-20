@@ -30,12 +30,16 @@ const makeQuestionService = Effect.fnUntraced(function* () {
     QuestionEvent
   >({
     idPrefix: "que",
-    makeRequest: (id: string, input: AskInput): Request => ({
-      id,
-      sessionID: input.sessionID,
-      questions: input.questions.map(snapshotQuestion),
-      tool: input.tool,
-    }),
+    makeRequest: (id: string, input: AskInput): Request => {
+      const request = {
+        id,
+        sessionID: input.sessionID,
+        questions: input.questions.map(snapshotQuestion),
+      } satisfies Request;
+      return input.tool === undefined
+        ? request
+        : { ...request, tool: { ...input.tool } };
+    },
     snapshotRequest,
     askedEvent: (request: Request): QuestionEvent => ({
       type: "question.asked",

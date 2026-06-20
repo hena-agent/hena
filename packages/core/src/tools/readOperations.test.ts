@@ -65,6 +65,19 @@ it.effect("uses default file line range", () =>
   }).pipe(Effect.provide(fileLayer("a\nb"))),
 );
 
+it.effect("caps requested file line ranges", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readFile(fs, "/file.txt", {
+      filePath: "/file.txt",
+      limit: 3000,
+    });
+
+    assert.strictEqual(result.details.lineEnd, 2000);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(Effect.provide(fileLayer("x\n".repeat(3000)))),
+);
+
 it.effect("trims carriage returns from CRLF lines", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -190,6 +203,25 @@ it.effect("truncates oversized directory listings", () =>
     Effect.provide(
       FileSystem.layerNoop({
         readDirectory: () => Effect.succeed(["x".repeat(1024 * 1024 + 1)]),
+      }),
+    ),
+  ),
+);
+
+it.effect("caps directory entries before sorting", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readDirectory(fs, "/workspace");
+
+    assert.strictEqual(result.details.entries, 10000);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readDirectory: () =>
+          Effect.succeed(
+            Array.from({ length: 10001 }, (_, index) => `file-${index}`),
+          ),
       }),
     ),
   ),

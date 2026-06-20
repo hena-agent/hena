@@ -1,4 +1,4 @@
-import { Deferred, Effect, PubSub } from "effect";
+import { Deferred, Effect, PubSub, type Semaphore } from "effect";
 
 import type {
   PendingRequestEntry,
@@ -18,6 +18,7 @@ export interface PendingRequestStore<
   closed: boolean;
   nextID: number;
   readonly events: PubSub.PubSub<Event>;
+  readonly lock: Semaphore.Semaphore;
   readonly options: PendingRequestRegistryOptions<
     Input,
     Request,
@@ -37,10 +38,12 @@ export const makePendingRequestStore = <
 >(
   options: PendingRequestRegistryOptions<Input, Request, Failure, Event>,
   events: PubSub.PubSub<Event>,
+  lock: Semaphore.Semaphore,
 ): PendingRequestStore<Input, Request, Value, Failure, Event> => ({
   cancelled: new Set(),
   closed: false,
   events,
+  lock,
   nextID: 0,
   options,
   pending: new Map(),

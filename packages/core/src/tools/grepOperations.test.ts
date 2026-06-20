@@ -101,6 +101,31 @@ it.effect("continues after truncated grep candidates", () =>
   ),
 );
 
+it.effect("stops grepping empty-line files at the input byte cap", () => {
+  let pulls = 0;
+  const chunk = new TextEncoder().encode("\n".repeat(600_000));
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* grepFile(fs, /needle/, "/workspace/large.log", 10);
+
+    assert.strictEqual(result.truncated, true);
+    assert.strictEqual(pulls, 2);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        stream: () =>
+          Stream.make(chunk, chunk, chunk).pipe(
+            Stream.tap(() =>
+              Effect.sync(() => {
+                pulls += 1;
+              }),
+            ),
+          ),
+      }),
+    ),
+  );
+});
+
 it("formats grouped grep matches", () => {
   assert.strictEqual(
     formatMatches([

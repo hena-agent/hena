@@ -2,6 +2,7 @@ import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
+import { ensureEditSize } from "./editBounds";
 import { editContent } from "./editOperations";
 import {
   type EditToolDetails,
@@ -48,19 +49,23 @@ const makeEditTool = Effect.fnUntraced(function* () {
           new ToolInputError({ message: "Path to edit must be a file." }),
         );
       }
+      const info = yield* fs.stat(authorization.canonicalPath);
+      yield* ensureEditSize(info.size, "File is too large to edit.");
       const current = yield* fs.readFileString(authorization.canonicalPath);
       const edit = yield* editContent(
         current,
         params.oldString,
         params.newString,
       );
+      const bytes = encoder.encode(edit.content).length;
+      yield* ensureEditSize(bytes, "Edited file is too large to write.");
       yield* fs.writeFileString(authorization.canonicalPath, edit.content);
       return {
         content: [{ type: "text", text: "Edited file successfully." }],
         details: {
           path: authorization.canonicalPath,
           replacements: edit.replacements,
-          bytes: encoder.encode(edit.content).length,
+          bytes,
         },
       } satisfies PiAgent.AgentToolResult<EditToolDetails>;
     }),

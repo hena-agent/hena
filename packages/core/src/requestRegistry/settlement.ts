@@ -1,7 +1,8 @@
 import { Effect } from "effect";
 
+import { finalizeSettlement } from "./finalizeSettlement";
 import { restoreSettlingOnError } from "./restoreSettlingOnError";
-import { type PendingRequestStore, publishSettlement } from "./store";
+import type { PendingRequestStore } from "./store";
 import type { PendingRequestEntry, PendingRequestSettlement } from "./types";
 
 interface SettlePendingRequestInput<
@@ -65,22 +66,13 @@ export const settlePendingRequest = <
                   restoreSettlingOnError(input.store, input.requestID, entry),
                 ),
                 Effect.flatMap((settlement) =>
-                  Effect.sync(() => {
-                    if (input.store.settling.get(input.requestID) !== entry) {
-                      return false;
-                    }
-                    input.store.cancelled.delete(input.requestID);
-                    input.store.settling.delete(input.requestID);
-                    return true;
-                  }).pipe(
-                    Effect.flatMap((owned) =>
-                      owned
-                        ? publishSettlement(input.store, settlement).pipe(
-                            Effect.ensuring(input.complete(entry, settlement)),
-                          )
-                        : Effect.void,
-                    ),
-                  ),
+                  finalizeSettlement({
+                    store: input.store,
+                    requestID: input.requestID,
+                    entry,
+                    settlement,
+                    complete: input.complete,
+                  }),
                 ),
               ),
       ),

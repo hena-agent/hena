@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, PubSub, Stream } from "effect";
+import { Deferred, Effect, Fiber, PubSub, Semaphore, Stream } from "effect";
 
 import { closeStore } from "./lifecycle";
 import { makePendingRequestRegistry } from "./makePendingRequestRegistry";
@@ -118,13 +118,14 @@ it.effect("fails new requests after the registry scope closes", () =>
 it.effect("ignores repeated registry close calls", () =>
   Effect.gen(function* () {
     const events = yield* PubSub.unbounded<Event>();
+    const lock = yield* Semaphore.make(1);
     const store = makePendingRequestStore<
       Input,
       Request,
       string,
       string,
       Event
-    >(registryOptions, events);
+    >(registryOptions, events, lock);
 
     yield* closeStore(store);
     yield* closeStore(store);

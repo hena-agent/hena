@@ -1,6 +1,10 @@
 import type { PermissionRequest } from "./schema";
 import type { PermissionAskInput } from "./types";
 
+type PermissionTool = NonNullable<PermissionRequest["tool"]>;
+
+const snapshotTool = (tool: PermissionTool): PermissionTool => ({ ...tool });
+
 const snapshotMetadataValue = (value: unknown): unknown => {
   if (Array.isArray(value)) {
     return value.map(snapshotMetadataValue);
@@ -45,7 +49,9 @@ export const makeRequest = (
     metadata: snapshotMetadata(input.metadata),
   } satisfies PermissionRequest;
 
-  return input.tool === undefined ? request : { ...request, tool: input.tool };
+  return input.tool === undefined
+    ? request
+    : { ...request, tool: snapshotTool(input.tool) };
 };
 
 export const snapshotPermissionRequest = (
@@ -62,7 +68,7 @@ export const snapshotPermissionRequest = (
 
   return request.tool === undefined
     ? snapshot
-    : { ...snapshot, tool: request.tool };
+    : { ...snapshot, tool: snapshotTool(request.tool) };
 };
 
 export const isAlwaysGranted = (

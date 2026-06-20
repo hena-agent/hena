@@ -281,6 +281,7 @@ it.effect("shares the execution environment with harness options", () =>
       );
 
       assert.strictEqual(state.options?.env, environment.env);
+      assert.strictEqual("cleanup" in environment, false);
     }),
   ),
 );

@@ -235,6 +235,7 @@ it.effect("snapshots permission request inputs", () =>
     const patterns = ["/outside/*"];
     const always = ["/outside/*"];
     const metadata = { filepath: "/outside/file.txt" };
+    const tool = { callID: "call-permission" };
     const fiber = yield* service
       .ask({
         sessionID: "session-1",
@@ -242,12 +243,14 @@ it.effect("snapshots permission request inputs", () =>
         patterns,
         always,
         metadata,
+        tool,
       })
       .pipe(Effect.forkDetach({ startImmediately: true }));
 
     patterns.push("/mutated/*");
     always.push("/mutated/*");
     metadata.filepath = "/mutated/file.txt";
+    tool.callID = "mutated";
     yield* Effect.yieldNow;
     const [pending] = yield* service.list();
     if (pending === undefined) {
@@ -257,6 +260,7 @@ it.effect("snapshots permission request inputs", () =>
     assert.deepStrictEqual(pending.patterns, ["/outside/*"]);
     assert.deepStrictEqual(pending.always, ["/outside/*"]);
     assert.deepStrictEqual(pending.metadata, { filepath: "/outside/file.txt" });
+    assert.strictEqual(pending.tool?.callID, "call-permission");
 
     yield* service.deny({ requestID: pending.id });
     yield* Fiber.join(fiber).pipe(Effect.exit);
@@ -280,6 +284,7 @@ it.effect(
           patterns: ["/outside/*"],
           always: ["/outside/*"],
           metadata: { filepath: "/outside/file.txt" },
+          tool: { callID: "call-permission" },
         })
         .pipe(Effect.forkDetach({ startImmediately: true }));
 
@@ -290,15 +295,18 @@ it.effect(
         throw new Error("expected a pending permission request");
       }
       Object.assign(pending.metadata, { filepath: "/mutated/file.txt" });
+      Object.assign(pending.tool ?? {}, { callID: "mutated" });
 
       const [freshPending] = yield* service.list();
       assert.deepStrictEqual(freshPending?.metadata, {
         filepath: "/outside/file.txt",
       });
+      assert.strictEqual(freshPending?.tool?.callID, "call-permission");
       if (events[0]?.type === "permission.asked") {
         assert.deepStrictEqual(events[0].request.metadata, {
           filepath: "/outside/file.txt",
         });
+        assert.strictEqual(events[0].request.tool?.callID, "call-permission");
       }
 
       yield* service.deny({ requestID: pending.id });

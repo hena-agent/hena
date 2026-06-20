@@ -1,7 +1,8 @@
 import { Context, Effect, Layer } from "effect";
 
 import { makePendingRequestRegistry } from "../requestRegistry/makePendingRequestRegistry";
-import { denyRequest, makeDeny, makeGrant } from "./lifecycle";
+import { makeGrant } from "./grant";
+import { denyRequest, makeDeny } from "./lifecycle";
 import { isAlwaysGranted, makeRequest } from "./request";
 import type {
   PermissionDeniedError,

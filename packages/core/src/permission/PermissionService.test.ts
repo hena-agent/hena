@@ -97,6 +97,42 @@ it.effect("keeps always grants scoped to a session", () =>
   }).pipe(Effect.provide(PermissionService.Live)),
 );
 
+it.effect("always grants resolve already pending matching requests", () =>
+  Effect.gen(function* () {
+    const service = yield* PermissionService;
+    const firstFiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        patterns: ["/outside/*"],
+        always: ["/outside/*"],
+        metadata: {},
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    const secondFiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        patterns: ["/outside/*"],
+        always: ["/outside/*"],
+        metadata: {},
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [first] = yield* service.list();
+    if (first === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+
+    yield* service.grant({ requestID: first.id, scope: "always" });
+    yield* Fiber.join(firstFiber);
+    yield* Fiber.join(secondFiber);
+
+    assert.deepStrictEqual(yield* service.list(), []);
+  }).pipe(Effect.provide(PermissionService.Live)),
+);
+
 it.effect("denies pending permissions and reports missing request ids", () =>
   Effect.gen(function* () {
     const service = yield* PermissionService;

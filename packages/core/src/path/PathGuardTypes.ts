@@ -28,6 +28,7 @@ export interface PathGuardConfig {
   readonly getTargetKind?: (
     canonicalPath: string,
   ) => Effect.Effect<PathGuardTargetKind, PlatformError>;
+  readonly pathExists: (path: string) => Effect.Effect<boolean, PlatformError>;
   readonly roots: ReadonlyArray<string>;
   readonly sessionID: string;
 }

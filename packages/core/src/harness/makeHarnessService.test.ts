@@ -235,6 +235,17 @@ class FailingThinkingHarness extends FakeHarness {
   }
 }
 
+class FailingRollbackHarness extends FailingThinkingHarness {
+  override async setModel(model: PiAi.Model<PiAi.Api>): Promise<void> {
+    await Promise.resolve();
+    this.calls.push(`setModel:${model.id}`);
+    if (model.id === "one") {
+      throw new PiAgent.AgentHarnessError("invalid_state", "rollback failed");
+    }
+    this.model = model;
+  }
+}
+
 it.effect("serializes structural harness operations", () =>
   Effect.gen(function* () {
     const harness = new FakeHarness();
@@ -362,6 +373,25 @@ it.effect("rolls back model switches when thinking level update fails", () =>
     assert.ok(error instanceof HarnessServiceError);
     assert.strictEqual(error.code, "invalid_argument");
     assert.strictEqual(harness.model, modelOne);
+    assert.deepStrictEqual(harness.calls, [
+      "setModel:two",
+      "setThinking:fail",
+      "setModel:one",
+    ]);
+  }),
+);
+
+it.effect("surfaces rollback failures during model switches", () =>
+  Effect.gen(function* () {
+    const harness = new FailingRollbackHarness();
+    const service = yield* makeHarnessService(harness);
+    const error = yield* service
+      .switchModel(modelTwo, "high")
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof HarnessServiceError);
+    assert.strictEqual(error.code, "invalid_state");
+    assert.strictEqual(harness.model, modelTwo);
     assert.deepStrictEqual(harness.calls, [
       "setModel:two",
       "setThinking:fail",

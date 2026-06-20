@@ -1,5 +1,12 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Context, Effect, FileSystem, Layer, Schema } from "effect";
+import {
+  Context,
+  Effect,
+  Path as EffectPath,
+  FileSystem,
+  Layer,
+  Schema,
+} from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import {
@@ -11,6 +18,7 @@ import {
   makeServiceExecuteAgentTool,
   type ToolShape,
 } from "./serviceAgentTool";
+import { resolvePath, ToolWorkspace } from "./workspace";
 
 const WriteToolParameters = Schema.Struct({
   content: Schema.String.annotate({
@@ -34,15 +42,22 @@ const encoder = new TextEncoder();
 
 const makeWriteTool = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* EffectPath.Path;
   const pathGuard = yield* PathGuard;
+  const workspace = yield* ToolWorkspace;
   return {
     execute: Effect.fnUntraced(function* (
       params: WriteToolParameters,
       context?: ToolInvocationContext<WriteToolDetails>,
     ) {
       const tool = toolReferenceFromContext(context);
-      const authorization = yield* pathGuard.authorizeCreateFile(
+      const requested = resolvePath(
+        pathService,
+        workspace.cwd,
         params.filePath,
+      );
+      const authorization = yield* pathGuard.authorizeCreateFile(
+        requested,
         tool === undefined ? undefined : { tool },
       );
       yield* fs.writeFileString(authorization.canonicalPath, params.content);
@@ -63,7 +78,7 @@ export class WriteTool extends Context.Service<WriteTool, WriteToolShape>()(
   static Live: Layer.Layer<
     WriteTool,
     never,
-    FileSystem.FileSystem | PathGuard
+    FileSystem.FileSystem | EffectPath.Path | PathGuard | ToolWorkspace
   > = Layer.effect(WriteTool)(makeWriteTool());
 }
 

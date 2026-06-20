@@ -1,8 +1,11 @@
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, FileSystem, Layer } from "effect";
+import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { makeWriteAgentTool, WriteTool } from "./WriteTool";
+import { ToolWorkspace } from "./workspace";
+
+const workspace = ToolWorkspace.layer({ cwd: "/workspace" });
 
 it.effect("writes content after PathGuard authorization", () => {
   const writes: Array<{ readonly path: string; readonly content: string }> = [];
@@ -25,6 +28,8 @@ it.effect("writes content after PathGuard authorization", () => {
     });
   }).pipe(
     Effect.provide(WriteTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
     Effect.provide(
       Layer.succeed(PathGuard)({
         authorize: (path) =>
@@ -72,6 +77,8 @@ it.effect("passes tool call context to PathGuard authorization", () => {
     assert.deepStrictEqual(authorizedTools, ["call-1"]);
   }).pipe(
     Effect.provide(WriteTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
     Effect.provide(
       Layer.succeed(PathGuard)({
         authorize: (path, options) =>
@@ -90,6 +97,44 @@ it.effect("passes tool call context to PathGuard authorization", () => {
             allowedBy: "workspace",
             kind: "file",
           } as const),
+      }),
+    ),
+    Effect.provide(
+      FileSystem.layerNoop({
+        writeFileString: () => Effect.void,
+      }),
+    ),
+  );
+});
+
+it.effect("resolves relative write paths from the tool workspace", () => {
+  const authorized: Array<string> = [];
+  return Effect.gen(function* () {
+    const tool = yield* WriteTool;
+    yield* tool.execute({ filePath: "file.txt", content: "hello" });
+
+    assert.deepStrictEqual(authorized, ["/workspace/file.txt"]);
+  }).pipe(
+    Effect.provide(WriteTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeCreateFile: (path) => {
+          authorized.push(path);
+          return Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+          });
+        },
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          }),
       }),
     ),
     Effect.provide(

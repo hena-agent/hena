@@ -19,6 +19,7 @@ import {
   makeServiceExecuteAgentTool,
   type ToolShape,
 } from "./serviceAgentTool";
+import { resolvePath, ToolWorkspace } from "./workspace";
 
 const PositiveInt = Schema.Int.check(Schema.isGreaterThanOrEqualTo(1));
 
@@ -43,18 +44,21 @@ const makeReadTool = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* EffectPath.Path;
   const pathGuard = yield* PathGuard;
+  const workspace = yield* ToolWorkspace;
   return {
     execute: Effect.fnUntraced(function* (
       params: ReadToolParameters,
       context?: ToolInvocationContext<ReadToolDetails>,
     ) {
       const tool = toolReferenceFromContext(context);
-      const authorization = yield* pathGuard.authorizeExistingPath(
+      const requested = resolvePath(
+        pathService,
+        workspace.cwd,
         params.filePath,
-        {
-          ...(tool === undefined ? {} : { tool }),
-        },
       );
+      const authorization = yield* pathGuard.authorizeExistingPath(requested, {
+        ...(tool === undefined ? {} : { tool }),
+      });
       if (authorization.kind === "directory") {
         return yield* readDirectory(
           fs,
@@ -73,7 +77,7 @@ export class ReadTool extends Context.Service<ReadTool, ReadToolShape>()(
   static Live: Layer.Layer<
     ReadTool,
     never,
-    FileSystem.FileSystem | EffectPath.Path | PathGuard
+    FileSystem.FileSystem | EffectPath.Path | PathGuard | ToolWorkspace
   > = Layer.effect(ReadTool)(makeReadTool());
 }
 

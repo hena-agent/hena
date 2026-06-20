@@ -27,11 +27,7 @@ const normalizeRuntimeRoots = (
   config: SessionRuntimeConfig,
 ): SessionRuntimeConfig => ({
   ...config,
-  roots: withPrimaryRoot({
-    cwd: config.cwd,
-    roots: config.roots,
-    sessionID: "",
-  }),
+  roots: withPrimaryRoot(config.cwd, config.roots),
 });
 
 export const makeSessionRuntimeLayer = (

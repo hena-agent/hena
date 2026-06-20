@@ -12,6 +12,7 @@ const providePathGuard = (roots: ReadonlyArray<string>) =>
     sessionID: "session-1",
     roots,
     canonicalize,
+    pathExists: () => Effect.succeed(false),
   }).pipe(
     Layer.provideMerge(PermissionService.Live),
     Layer.provideMerge(EffectPath.layer),
@@ -129,6 +130,7 @@ it.effect(
             Effect.succeed(
               path === "/workspace/link/secret.txt" ? "/secret.txt" : path,
             ),
+          pathExists: () => Effect.succeed(false),
         }).pipe(
           Layer.provideMerge(PermissionService.Live),
           Layer.provideMerge(EffectPath.layer),
@@ -153,6 +155,7 @@ it.effect("detects kind inside the existing-path authorization boundary", () =>
         sessionID: "session-1",
         roots: ["/workspace"],
         canonicalize,
+        pathExists: () => Effect.succeed(false),
         getTargetKind: () => Effect.succeed("directory"),
       }).pipe(
         Layer.provideMerge(PermissionService.Live),
@@ -197,10 +200,50 @@ it.effect(
             Effect.succeed(
               path === "/workspace/link" ? "/workspace/real" : path,
             ),
+          pathExists: () => Effect.succeed(false),
         }).pipe(
           Layer.provideMerge(PermissionService.Live),
           Layer.provideMerge(EffectPath.layer),
         ),
       ),
     ),
+);
+
+it.effect("authorizes existing write targets by canonicalizing the leaf", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const permissions = yield* PermissionService;
+    const fiber = yield* guard
+      .authorizeCreateFile("/workspace/link.txt")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [request] = yield* permissions.list();
+    if (request === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+
+    assert.deepStrictEqual(request.metadata, {
+      filepath: "/outside/secret.txt",
+      parentDir: "/outside",
+    });
+
+    yield* permissions.deny({ requestID: request.id, message: "No" });
+    yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize: (path) =>
+          Effect.succeed(
+            path === "/workspace/link.txt" ? "/outside/secret.txt" : path,
+          ),
+        pathExists: (path) => Effect.succeed(path === "/workspace/link.txt"),
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
 );

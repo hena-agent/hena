@@ -1,8 +1,13 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Context, Effect, FileSystem, Layer, Schema } from "effect";
+import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { editContent } from "./editOperations";
+import {
+  type EditToolDetails,
+  type EditToolInput,
+  EditToolParameters,
+} from "./editSchema";
 import {
   type CoreAgentTool,
   type ToolInvocationContext,
@@ -12,42 +17,30 @@ import {
   makeServiceExecuteAgentTool,
   type ToolShape,
 } from "./serviceAgentTool";
+import { resolvePath, ToolWorkspace } from "./workspace";
 
-const EditToolParameters = Schema.Struct({
-  filePath: Schema.String.annotate({
-    description: "The absolute path to the file to edit",
-  }),
-  oldString: Schema.String.annotate({
-    description: "The exact string to replace",
-  }),
-  newString: Schema.String.annotate({
-    description: "The replacement string",
-  }),
-});
-
-type EditToolParameters = (typeof EditToolParameters)["Type"];
-
-export interface EditToolDetails {
-  readonly path: string;
-  readonly replacements: number;
-  readonly bytes: number;
-}
-
-export type EditToolShape = ToolShape<EditToolParameters, EditToolDetails>;
+export type EditToolShape = ToolShape<EditToolInput, EditToolDetails>;
 
 const encoder = new TextEncoder();
 
 const makeEditTool = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem.FileSystem;
+  const pathService = yield* EffectPath.Path;
   const pathGuard = yield* PathGuard;
+  const workspace = yield* ToolWorkspace;
   return {
     execute: Effect.fnUntraced(function* (
-      params: EditToolParameters,
+      params: EditToolInput,
       context?: ToolInvocationContext<EditToolDetails>,
     ) {
       const tool = toolReferenceFromContext(context);
-      const authorization = yield* pathGuard.authorize(
+      const requested = resolvePath(
+        pathService,
+        workspace.cwd,
         params.filePath,
+      );
+      const authorization = yield* pathGuard.authorize(
+        requested,
         tool === undefined ? undefined : { tool },
       );
       const current = yield* fs.readFileString(authorization.canonicalPath);
@@ -72,8 +65,11 @@ const makeEditTool = Effect.fnUntraced(function* () {
 export class EditTool extends Context.Service<EditTool, EditToolShape>()(
   "@hena-dev/core/EditTool",
 ) {
-  static Live: Layer.Layer<EditTool, never, FileSystem.FileSystem | PathGuard> =
-    Layer.effect(EditTool)(makeEditTool());
+  static Live: Layer.Layer<
+    EditTool,
+    never,
+    FileSystem.FileSystem | EffectPath.Path | PathGuard | ToolWorkspace
+  > = Layer.effect(EditTool)(makeEditTool());
 }
 
 export const makeEditAgentTool = (

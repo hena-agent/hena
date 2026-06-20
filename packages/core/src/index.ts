@@ -9,6 +9,7 @@ export type { AutoCompactionConfig, AutoCompactionInput, AutoCompactionResult, A
 export type { ExecutionEnvironment, ExecutionEnvProviderShape, ExecutionEnvRequest } from "./execution/ExecutionEnvProvider";
 export { ExecutionEnvProvider, ExecutionEnvProviderError, makeCloudExecutionEnvProvider, makeLocalExecutionEnvProvider } from "./execution/ExecutionEnvProvider";
 export { attachHarnessEventBridge } from "./harness/attachEvents";
+export { HarnessServiceError } from "./harness/errors";
 export type { HarnessEventEnvelope } from "./harness/eventSchema";
 export { toHarnessEventEnvelope } from "./harness/eventSchema";
 export type { HarnessEventBridge, HarnessEventSource } from "./harness/events";
@@ -37,6 +38,7 @@ export { makeSessionRuntimeLayer } from "./session/runtimeLayer";
 export type { AgentHarnessFactoryShape, SessionRuntimeConfig, SessionRuntimeHarness, SessionRuntimeLoaderShape, SessionRuntimeShape } from "./session/SessionRuntime";
 export { AgentHarnessFactory, SessionRuntime, SessionRuntimeLoader, SessionRuntimeMap } from "./session/SessionRuntime";
 export { SessionMetadataError } from "./session/sessionID";
+export { AgentHarnessFactoryError, SessionRuntimeLoadError } from "./session/types";
 export type { ProjectInstructionDiscoveryInput } from "./systemPrompt/projectInstructions";
 export { collectProjectInstructions } from "./systemPrompt/projectInstructions";
 export type { ProjectInstruction, SystemPromptInput } from "./systemPrompt/systemPrompt";

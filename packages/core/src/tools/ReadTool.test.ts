@@ -10,6 +10,7 @@ import {
 
 import { PathGuard } from "../path/PathGuard";
 import { makeReadAgentTool, ReadTool } from "./ReadTool";
+import { ToolWorkspace } from "./workspace";
 
 const info = (type: FileSystem.File.Type): FileSystem.File.Info => ({
   type,
@@ -41,6 +42,8 @@ const pathGuard = Layer.succeed(PathGuard)({
     }),
 });
 
+const workspace = ToolWorkspace.layer({ cwd: "/workspace" });
+
 it.effect("reads a line-limited file through PathGuard", () =>
   Effect.gen(function* () {
     const tool = yield* ReadTool;
@@ -67,6 +70,7 @@ it.effect("reads a line-limited file through PathGuard", () =>
   }).pipe(
     Effect.provide(ReadTool.Live),
     Effect.provide(pathGuard),
+    Effect.provide(workspace),
     Effect.provide(EffectPath.layer),
     Effect.provide(
       FileSystem.layerNoop({
@@ -94,6 +98,7 @@ it.effect("reads and sorts a directory", () =>
   }).pipe(
     Effect.provide(ReadTool.Live),
     Effect.provide(pathGuard),
+    Effect.provide(workspace),
     Effect.provide(EffectPath.layer),
     Effect.provide(
       FileSystem.layerNoop({
@@ -118,6 +123,7 @@ it.effect("uses PathGuard's existing-path boundary for directory reads", () => {
     assert.deepStrictEqual(authorized, ["/workspace"]);
   }).pipe(
     Effect.provide(ReadTool.Live),
+    Effect.provide(workspace),
     Effect.provide(
       Layer.succeed(PathGuard)({
         authorize: (path) =>
@@ -139,6 +145,42 @@ it.effect("uses PathGuard's existing-path boundary for directory reads", () => {
       FileSystem.layerNoop({
         readDirectory: () => Effect.succeed([]),
         stat: () => Effect.succeed(info("Directory")),
+      }),
+    ),
+  );
+});
+
+it.effect("resolves relative file paths from the tool workspace", () => {
+  const authorized: Array<string> = [];
+  return Effect.gen(function* () {
+    const tool = yield* ReadTool;
+    yield* tool.execute({ filePath: "file.txt" });
+
+    assert.deepStrictEqual(authorized, ["/workspace/file.txt"]);
+  }).pipe(
+    Effect.provide(ReadTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) => {
+          authorized.push(path);
+          return Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          });
+        },
+      }),
+    ),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      FileSystem.layerNoop({
+        readFileString: () => Effect.succeed("hello"),
+        stat: () => Effect.succeed(info("File")),
       }),
     ),
   );

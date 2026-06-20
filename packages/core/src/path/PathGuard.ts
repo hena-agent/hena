@@ -2,7 +2,7 @@ import { Context, Effect, Path as EffectPath, Layer } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
 import { PermissionService } from "../permission/PermissionService";
-import { authorizeCanonicalPath } from "./authorization";
+import { authorizeCanonicalPath, withPathGuardTool } from "./authorization";
 import type {
   PathGuardAuthorizeOptions,
   PathGuardConfig,
@@ -10,23 +10,17 @@ import type {
   PathGuardShape,
   PathGuardTargetKind,
 } from "./PathGuardTypes";
+import { resolveWriteTarget } from "./writeTarget";
 
 export type * from "./PathGuardTypes";
-
-const defaultTargetKind = (): Effect.Effect<PathGuardTargetKind> =>
-  Effect.succeed("file");
-
-const withTool = (
-  kind: PathGuardTargetKind,
-  options?: Omit<PathGuardAuthorizeOptions, "kind">,
-): PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind } =>
-  options?.tool === undefined ? { kind } : { kind, tool: options.tool };
 
 const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
   const permission = yield* PermissionService;
   const pathService = yield* EffectPath.Path;
   const roots = yield* Effect.forEach(config.roots, config.canonicalize);
-  const getTargetKind = config.getTargetKind ?? defaultTargetKind;
+  const getTargetKind =
+    config.getTargetKind ??
+    ((): Effect.Effect<PathGuardTargetKind> => Effect.succeed("file"));
   const authorizeCanonical = (
     canonicalPath: string,
     options: PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind },
@@ -47,7 +41,7 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
     const canonicalPath = yield* config.canonicalize(path);
     return yield* authorizeCanonical(
       canonicalPath,
-      withTool(options?.kind ?? "file", options),
+      withPathGuardTool(options?.kind ?? "file", options),
     );
   });
 
@@ -59,7 +53,7 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
     const kind = yield* getTargetKind(canonicalPath);
     const authorization = yield* authorizeCanonical(
       canonicalPath,
-      withTool(kind, options),
+      withPathGuardTool(kind, options),
     );
     return {
       ...authorization,
@@ -71,9 +65,16 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
     path: string,
     options?: Omit<PathGuardAuthorizeOptions, "kind">,
   ) {
-    const parent = yield* config.canonicalize(pathService.dirname(path));
-    const target = pathService.join(parent, pathService.basename(path));
-    return yield* authorizeCanonical(target, withTool("file", options));
+    const target = yield* resolveWriteTarget({
+      canonicalize: config.canonicalize,
+      path,
+      pathExists: config.pathExists,
+      pathService,
+    });
+    return yield* authorizeCanonical(
+      target,
+      withPathGuardTool("file", options),
+    );
   });
 
   return {

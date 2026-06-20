@@ -32,11 +32,10 @@ export class ExecutionEnvProviderError extends Schema.TaggedErrorClass<Execution
 ) {}
 
 export const withPrimaryRoot = (
-  request: ExecutionEnvRequest,
+  cwd: string,
+  roots: ReadonlyArray<string>,
 ): ReadonlyArray<string> =>
-  request.roots.includes(request.cwd)
-    ? [...request.roots]
-    : [request.cwd, ...request.roots];
+  roots.includes(cwd) ? [...roots] : [cwd, ...roots];
 
 const localEnvironment = (
   request: ExecutionEnvRequest,
@@ -54,7 +53,7 @@ const localEnvironment = (
   return {
     cwd: request.cwd,
     env,
-    roots: withPrimaryRoot(request),
+    roots: withPrimaryRoot(request.cwd, request.roots),
     // oxlint-disable-next-line typescript/promise-function-async
     cleanup: Effect.promise(() => env.cleanup()).pipe(Effect.ignore),
   };

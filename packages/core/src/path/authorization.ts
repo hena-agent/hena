@@ -19,6 +19,12 @@ interface AuthorizeCanonicalPathInput {
   readonly sessionID: string;
 }
 
+export const withPathGuardTool = (
+  kind: PathGuardTargetKind,
+  options?: Omit<PathGuardAuthorizeOptions, "kind">,
+): PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind } =>
+  options?.tool === undefined ? { kind } : { kind, tool: options.tool };
+
 export const authorizeCanonicalPath = Effect.fnUntraced(function* (
   input: AuthorizeCanonicalPathInput,
 ) {

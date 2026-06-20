@@ -289,6 +289,7 @@ it.effect("detects runtime path guard target kinds from filesystem stat", () =>
     ).pipe(
       Layer.provideMerge(
         FileSystem.layerNoop({
+          exists: (path) => Effect.succeed(path === "/repo/file.ts"),
           realPath: (path) => Effect.succeed(path),
           stat: (path) =>
             Effect.succeed(fileInfo(path === "/repo" ? "Directory" : "File")),
@@ -301,9 +302,11 @@ it.effect("detects runtime path guard target kinds from filesystem stat", () =>
       const guard = yield* PathGuard;
       const directory = yield* guard.authorizeExistingPath("/repo");
       const file = yield* guard.authorizeExistingPath("/repo/file.ts");
+      const writableFile = yield* guard.authorizeCreateFile("/repo/file.ts");
 
       assert.strictEqual(directory.kind, "directory");
       assert.strictEqual(file.kind, "file");
+      assert.strictEqual(writableFile.canonicalPath, "/repo/file.ts");
     }).pipe(Effect.provide(layer));
   }),
 );

@@ -20,6 +20,7 @@ export const makeRuntimePathGuardLayer = (
         sessionID,
         roots: config.roots,
         canonicalize: (path: string) => fs.realPath(path),
+        pathExists: (path: string) => fs.exists(path),
         getTargetKind: (path: string) =>
           fs
             .stat(path)

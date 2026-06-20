@@ -1,8 +1,9 @@
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, FileSystem, Layer } from "effect";
+import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { EditTool, makeEditAgentTool } from "./EditTool";
+import { ToolWorkspace } from "./workspace";
 
 const pathGuard = Layer.succeed(PathGuard)({
   authorize: (path) =>
@@ -16,6 +17,8 @@ const pathGuard = Layer.succeed(PathGuard)({
       kind: "file",
     }),
 });
+
+const workspace = ToolWorkspace.layer({ cwd: "/workspace" });
 
 it.effect(
   "replaces a unique exact string after PathGuard authorization",
@@ -48,6 +51,8 @@ it.effect(
     }).pipe(
       Effect.provide(EditTool.Live),
       Effect.provide(pathGuard),
+      Effect.provide(workspace),
+      Effect.provide(EffectPath.layer),
       Effect.provide(
         FileSystem.layerNoop({
           readFileString: () => Effect.succeed("const value = 1;\n"),
@@ -82,6 +87,8 @@ it.effect(
     }).pipe(
       Effect.provide(EditTool.Live),
       Effect.provide(pathGuard),
+      Effect.provide(workspace),
+      Effect.provide(EffectPath.layer),
       Effect.provide(
         FileSystem.layerNoop({
           readFileString: () => Effect.succeed("foo\n"),
@@ -110,6 +117,8 @@ it.effect("rejects ambiguous matches", () =>
   }).pipe(
     Effect.provide(EditTool.Live),
     Effect.provide(pathGuard),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
     Effect.provide(
       FileSystem.layerNoop({
         readFileString: () => Effect.succeed("same same"),
@@ -133,11 +142,56 @@ it.effect("rejects edits when the exact string is missing", () =>
   }).pipe(
     Effect.provide(EditTool.Live),
     Effect.provide(pathGuard),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
     Effect.provide(
       FileSystem.layerNoop({ readFileString: () => Effect.succeed("present") }),
     ),
   ),
 );
+
+it.effect("resolves relative edit paths from the tool workspace", () => {
+  const authorized: Array<string> = [];
+  return Effect.gen(function* () {
+    const tool = yield* EditTool;
+    yield* tool.execute({
+      filePath: "app.ts",
+      oldString: "before",
+      newString: "after",
+    });
+
+    assert.deepStrictEqual(authorized, ["/workspace/app.ts"]);
+  }).pipe(
+    Effect.provide(EditTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path) => {
+          authorized.push(path);
+          return Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+          });
+        },
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          }),
+      }),
+    ),
+    Effect.provide(
+      FileSystem.layerNoop({
+        readFileString: () => Effect.succeed("before"),
+        writeFileString: () => Effect.void,
+      }),
+    ),
+  );
+});
 
 it("adapts EditTool to a pi AgentTool", async () => {
   const tool = makeEditAgentTool(

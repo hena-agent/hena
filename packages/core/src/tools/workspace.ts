@@ -1,4 +1,4 @@
-import { Context, Effect, Path as EffectPath, Layer } from "effect";
+import { Context, type Path as EffectPath, Layer } from "effect";
 
 export interface ToolWorkspaceConfig {
   readonly cwd: string;
@@ -24,11 +24,3 @@ export const resolvePath = (
   }
   return pathService.resolve(cwd, target);
 };
-
-export const resolveWorkspacePath = Effect.fnUntraced(function* (
-  path?: string,
-) {
-  const workspace = yield* ToolWorkspace;
-  const pathService = yield* EffectPath.Path;
-  return resolvePath(pathService, workspace.cwd, path);
-});

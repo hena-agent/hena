@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 
 import { type PendingRequestStore, publishSettlement } from "./store";
 import type { PendingRequestEntry, PendingRequestSettlement } from "./types";
@@ -73,7 +73,20 @@ export const settlePendingRequest = <
       Effect.flatMap((entry) =>
         restore(input.makeSettlement(entry.request)).pipe(
           Effect.onError(() =>
-            Effect.sync(() => input.store.pending.set(input.requestID, entry)),
+            Effect.sync(() => {
+              if (!input.store.closed) {
+                input.store.pending.set(input.requestID, entry);
+                return undefined;
+              }
+              return input.store.options.rejectOnShutdown(entry.request)
+                .failure;
+            }).pipe(
+              Effect.flatMap((failure) =>
+                failure === undefined
+                  ? Effect.void
+                  : Deferred.fail(entry.deferred, failure).pipe(Effect.asVoid),
+              ),
+            ),
           ),
           Effect.flatMap((settlement) =>
             publishSettlement(input.store, settlement).pipe(

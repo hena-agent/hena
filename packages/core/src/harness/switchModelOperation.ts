@@ -12,6 +12,39 @@ const runPromise = <A>(
 
 const runSync = <A>(run: () => A): Effect.Effect<A> => Effect.sync(run);
 
+const setModel = (
+  harness: HarnessLike,
+  model: HenaModel,
+): Effect.Effect<void, HarnessServiceError> =>
+  runPromise(harness.setModel.bind(harness, model));
+
+const setThinkingLevel = (
+  harness: HarnessLike,
+  level: HenaThinkingLevel,
+): Effect.Effect<void, HarnessServiceError> =>
+  runPromise(harness.setThinkingLevel.bind(harness, level));
+
+const applyModelThenThinkingLevel: (
+  harness: HarnessLike,
+  nextModel: HenaModel,
+  thinkingLevel: HenaThinkingLevel,
+) => Effect.Effect<void, HarnessServiceError> = Effect.fnUntraced(
+  function* (harness, nextModel, thinkingLevel) {
+    const previousModel = yield* runSync(harness.getModel.bind(harness));
+    yield* setModel(harness, nextModel);
+    yield* setThinkingLevel(harness, thinkingLevel).pipe(
+      Effect.matchEffect({
+        onFailure: (error: HarnessServiceError) =>
+          setModel(harness, previousModel).pipe(
+            Effect.ignore,
+            Effect.andThen(Effect.fail(error)),
+          ),
+        onSuccess: () => Effect.void,
+      }),
+    );
+  },
+);
+
 export const makeSwitchModelOperation =
   (
     semaphore: Semaphore.Semaphore,
@@ -32,14 +65,7 @@ export const makeSwitchModelOperation =
           applyModelThenThinkingLevel: (
             nextModel: HenaModel,
             thinkingLevel: HenaThinkingLevel,
-          ) =>
-            runPromise(harness.setModel.bind(harness, nextModel)).pipe(
-              Effect.andThen(
-                runPromise(
-                  harness.setThinkingLevel.bind(harness, thinkingLevel),
-                ),
-              ),
-            ),
+          ) => applyModelThenThinkingLevel(harness, nextModel, thinkingLevel),
         },
         model,
         requestedLevel,

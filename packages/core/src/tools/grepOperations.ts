@@ -1,7 +1,8 @@
 import { Effect, type FileSystem } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
-import { compileGlob } from "./globMatch";
+import { compileGlobEffect } from "./globMatch";
+import type { ToolInputError } from "./toolErrors";
 
 export interface GrepMatch {
   readonly path: string;
@@ -16,14 +17,18 @@ export interface GrepResult {
 
 type IncludeMatcher = (relativePath: string, basename: string) => boolean;
 
-export const makeIncludeMatcher = (include?: string): IncludeMatcher => {
-  if (include === undefined) {
-    return (): boolean => true;
-  }
-  const matches = compileGlob(include);
-  return (relativePath: string, basename: string): boolean =>
-    matches(relativePath) || matches(basename);
-};
+export const makeIncludeMatcher: (
+  include?: string,
+) => Effect.Effect<IncludeMatcher, ToolInputError> = Effect.fnUntraced(
+  function* (include) {
+    if (include === undefined) {
+      return (): boolean => true;
+    }
+    const matches = yield* compileGlobEffect(include);
+    return (relativePath: string, basename: string): boolean =>
+      matches(relativePath) || matches(basename);
+  },
+);
 
 export const grepFile: (
   fs: FileSystem.FileSystem,

@@ -112,6 +112,7 @@ interface TestState {
   loads: number;
   options?: PiAgent.AgentHarnessOptions;
   request?: ExecutionEnvRequest;
+  readonly roots?: ReadonlyArray<string>;
   readonly shellEnv?: Readonly<Record<string, string>>;
   readonly shellPath?: string;
 }
@@ -125,7 +126,7 @@ const makeLayers = (state: TestState) =>
           const session = yield* makeSession(sessionID);
           return {
             cwd: "/repo",
-            roots: ["/repo"],
+            roots: state.roots ?? ["/repo"],
             session,
             model,
             ...(state.shellEnv === undefined
@@ -166,6 +167,8 @@ const makeLayers = (state: TestState) =>
       exists: (path) => Effect.succeed(state.files?.has(path) ?? false),
       readFileString: (path) => Effect.succeed(state.files?.get(path) ?? ""),
       realPath: (path) => Effect.succeed(path),
+      stat: (path) =>
+        Effect.succeed(fileInfo(path === "/repo" ? "Directory" : "File")),
     }),
     EffectPath.layer,
   );
@@ -249,15 +252,41 @@ it.effect("passes shell options into the execution environment request", () =>
   ),
 );
 
+it.effect("normalizes runtime roots before wiring services", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const state: TestState = { loads: 0, creates: 0, cleanups: 0, roots: [] };
+      const layer = SessionRuntimeMap.layer.pipe(
+        Layer.provide(makeLayers(state)),
+      );
+
+      yield* Effect.gen(function* () {
+        const guard = yield* PathGuard;
+        const authorization =
+          yield* guard.authorizeExistingPath("/repo/file.ts");
+
+        assert.strictEqual(authorization.allowedBy, "workspace");
+        assert.deepStrictEqual(state.request?.roots, ["/repo"]);
+      }).pipe(
+        Effect.provide(SessionRuntimeMap.get("ses_roots")),
+        Effect.provide(layer),
+      );
+    }),
+  ),
+);
+
 it.effect("detects runtime path guard target kinds from filesystem stat", () =>
   Effect.gen(function* () {
     const session = yield* makeSession("ses_path");
-    const layer = makeRuntimePathGuardLayer({
-      cwd: "/repo",
-      model,
-      roots: ["/repo"],
-      session,
-    }).pipe(
+    const layer = makeRuntimePathGuardLayer(
+      {
+        cwd: "/repo",
+        model,
+        roots: ["/repo"],
+        session,
+      },
+      "ses_path",
+    ).pipe(
       Layer.provideMerge(
         FileSystem.layerNoop({
           realPath: (path) => Effect.succeed(path),

@@ -5,6 +5,7 @@ import { assert, it } from "@effect/vitest";
 import { Effect } from "effect";
 
 import { AgentHarnessFactory } from "./AgentHarnessFactory";
+import { AgentHarnessFactoryError } from "./types";
 
 const model = PiAi.getModel("openai", "gpt-4o-mini");
 
@@ -30,5 +31,23 @@ it.effect("constructs a live pi AgentHarness", () =>
     });
 
     assert.strictEqual(harness.getModel(), model);
+  }).pipe(Effect.provide(AgentHarnessFactory.Live)),
+);
+
+it.effect("maps constructor failures to typed errors", () =>
+  Effect.gen(function* () {
+    const factory = yield* AgentHarnessFactory;
+    const session = yield* makeSession();
+    const error = yield* factory
+      .create({
+        activeToolNames: ["missing"],
+        env: new PiNode.NodeExecutionEnv({ cwd: process.cwd() }),
+        getApiKeyAndHeaders,
+        model,
+        session,
+      })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof AgentHarnessFactoryError);
   }).pipe(Effect.provide(AgentHarnessFactory.Live)),
 );

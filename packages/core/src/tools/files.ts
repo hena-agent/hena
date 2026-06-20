@@ -4,14 +4,15 @@ import { makeFileSearchCollector } from "./fileSearchCollector";
 import type {
   FileSearchOptions,
   FileSearchResult,
-  FileSearchTargetKind,
+  FileSearchVisitDirectory,
+  FileSearchVisitEntry,
 } from "./fileSearchTypes";
 import type { ToolExecutionError } from "./schema";
 
 const authorizedPath = Effect.fnUntraced(function* (
   options: FileSearchOptions,
   path: string,
-  kind: FileSearchTargetKind,
+  kind: "directory" | "file",
 ) {
   if (options.authorize === undefined) {
     return path;
@@ -29,52 +30,56 @@ export const searchFiles: (
   function* (fs, pathService, root, options) {
     const rootInfo = yield* fs.stat(root);
     const collector = makeFileSearchCollector(options);
+    const visitedDirectories = new Set<string>();
 
-    const visitDirectory: (
-      directory: string,
-      prefix: string,
-    ) => Effect.Effect<void, ToolExecutionError> = Effect.fnUntraced(function* (
-      directory: string,
-      prefix: string,
-    ) {
-      const entries = [...(yield* fs.readDirectory(directory))].sort(
-        (left, right) => left.localeCompare(right),
-      );
-
-      for (const entry of entries) {
-        if (collector.truncated) {
+    const visitDirectory: FileSearchVisitDirectory = Effect.fnUntraced(
+      function* (directory, prefix) {
+        const canonicalDir = yield* authorizedPath(
+          options,
+          directory,
+          "directory",
+        );
+        if (visitedDirectories.has(canonicalDir)) {
           return;
         }
-        yield* visitEntry(directory, prefix, entry);
-      }
-    });
+        visitedDirectories.add(canonicalDir);
+        const entries = [...(yield* fs.readDirectory(canonicalDir))].sort(
+          (left, right) => left.localeCompare(right),
+        );
 
-    const visitEntry: (
-      directory: string,
-      prefix: string,
-      entry: string,
-    ) => Effect.Effect<void, ToolExecutionError> = Effect.fnUntraced(function* (
-      directory: string,
-      prefix: string,
-      entry: string,
-    ) {
-      const fullPath = pathService.join(directory, entry);
-      const relativePath =
-        prefix === "" ? entry : pathService.join(prefix, entry);
-      const info = yield* fs.stat(fullPath);
+        for (const entry of entries) {
+          if (collector.truncated) {
+            return;
+          }
+          yield* visitEntry(canonicalDir, prefix, entry);
+        }
+      },
+    );
 
-      if (info.type === "File") {
-        if (!collector.matches(fullPath, relativePath)) {
+    const visitEntry: FileSearchVisitEntry = Effect.fnUntraced(
+      function* (directory, prefix, entry) {
+        const fullPath = pathService.join(directory, entry);
+        const relativePath =
+          prefix === "" ? entry : pathService.join(prefix, entry);
+        const info = yield* fs.stat(fullPath);
+
+        if (info.type === "File") {
+          if (!collector.matches(fullPath, relativePath)) {
+            return;
+          }
+          const canonicalPath = yield* authorizedPath(
+            options,
+            fullPath,
+            "file",
+          );
+          collector.add(canonicalPath);
           return;
         }
-        const canonicalPath = yield* authorizedPath(options, fullPath, "file");
-        collector.add(canonicalPath);
-        return;
-      }
-      if (info.type === "Directory") {
-        yield* visitDirectory(fullPath, relativePath);
-      }
-    });
+        if (info.type === "Directory") {
+          yield* visitDirectory(fullPath, relativePath);
+        }
+      },
+    );
 
     if (rootInfo.type === "File") {
       if (collector.matches(root, pathService.basename(root))) {

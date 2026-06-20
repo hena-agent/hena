@@ -5,6 +5,7 @@ import type { PendingRequestFailure } from "../requestRegistry/types";
 import { validateReply } from "./replyValidation";
 import {
   type Answer,
+  type Info,
   type QuestionEvent,
   QuestionRejectedError,
   QuestionRequestNotFound,
@@ -20,6 +21,14 @@ const rejectQuestion = (
   event: { type: "question.rejected", requestID: request.id },
 });
 
+const snapshotQuestion = (question: Info): Info => ({
+  question: question.question,
+  header: question.header,
+  options: question.options.map((option) => ({ ...option })),
+  custom: question.custom,
+  ...(question.multiple === undefined ? {} : { multiple: question.multiple }),
+});
+
 const makeQuestionService = Effect.fnUntraced(function* () {
   const registry = yield* makePendingRequestRegistry<
     AskInput,
@@ -32,7 +41,7 @@ const makeQuestionService = Effect.fnUntraced(function* () {
     makeRequest: (id: string, input: AskInput): Request => ({
       id,
       sessionID: input.sessionID,
-      questions: input.questions,
+      questions: input.questions.map(snapshotQuestion),
       tool: input.tool,
     }),
     askedEvent: (request: Request): QuestionEvent => ({

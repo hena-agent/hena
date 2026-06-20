@@ -227,6 +227,14 @@ class FailingHarness extends FakeHarness {
   }
 }
 
+class FailingThinkingHarness extends FakeHarness {
+  override async setThinkingLevel(): Promise<void> {
+    await Promise.resolve();
+    this.calls.push("setThinking:fail");
+    throw new PiAgent.AgentHarnessError("invalid_argument", "bad thinking");
+  }
+}
+
 it.effect("serializes structural harness operations", () =>
   Effect.gen(function* () {
     const harness = new FakeHarness();
@@ -341,6 +349,25 @@ it.effect(
         "setThinking:off",
       ]);
     }),
+);
+
+it.effect("rolls back model switches when thinking level update fails", () =>
+  Effect.gen(function* () {
+    const harness = new FailingThinkingHarness();
+    const service = yield* makeHarnessService(harness);
+    const error = yield* service
+      .switchModel(modelTwo, "high")
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof HarnessServiceError);
+    assert.strictEqual(error.code, "invalid_argument");
+    assert.strictEqual(harness.model, modelOne);
+    assert.deepStrictEqual(harness.calls, [
+      "setModel:two",
+      "setThinking:fail",
+      "setModel:one",
+    ]);
+  }),
 );
 
 it.effect("normalizes pi harness errors", () =>

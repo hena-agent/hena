@@ -31,7 +31,7 @@ export class ExecutionEnvProviderError extends Schema.TaggedErrorClass<Execution
   },
 ) {}
 
-const withPrimaryRoot = (
+export const withPrimaryRoot = (
   request: ExecutionEnvRequest,
 ): ReadonlyArray<string> =>
   request.roots.includes(request.cwd)

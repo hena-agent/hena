@@ -1,3 +1,7 @@
+import { Effect } from "effect";
+
+import { ToolInputError } from "./toolErrors";
+
 export interface GlobMatcherRuntime {
   readonly compile: (glob: string) => {
     readonly match: (path: string) => boolean;
@@ -8,7 +12,7 @@ const BunGlobMatcherRuntime: GlobMatcherRuntime = {
   compile: (glob: string) => new Bun.Glob(glob),
 };
 
-export const compileGlob = (
+const compileGlob = (
   glob: string,
   runtime: GlobMatcherRuntime = BunGlobMatcherRuntime,
 ): ((path: string) => boolean) => {
@@ -18,3 +22,13 @@ export const compileGlob = (
 
 export const matchesGlob = (glob: string, path: string): boolean =>
   compileGlob(glob)(path);
+
+export const compileGlobEffect = (
+  glob: string,
+  runtime: GlobMatcherRuntime = BunGlobMatcherRuntime,
+): Effect.Effect<(path: string) => boolean, ToolInputError> =>
+  Effect.try({
+    try: () => compileGlob(glob, runtime),
+    catch: (error: unknown) =>
+      new ToolInputError({ message: String(error).replace(/^Error: /, "") }),
+  });

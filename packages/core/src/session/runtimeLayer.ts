@@ -1,9 +1,15 @@
-import { type Path as EffectPath, type FileSystem, Layer } from "effect";
+import {
+  Effect,
+  type Path as EffectPath,
+  type FileSystem,
+  Layer,
+} from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
-import type {
-  ExecutionEnvProvider,
-  ExecutionEnvProviderError,
+import {
+  type ExecutionEnvProvider,
+  type ExecutionEnvProviderError,
+  withPrimaryRoot,
 } from "../execution/ExecutionEnvProvider";
 import type { HarnessService } from "../harness/HarnessService";
 import type { PathGuard } from "../path/PathGuard";
@@ -14,8 +20,19 @@ import type { AgentHarnessFactory } from "./AgentHarnessFactory";
 import { makeRuntimeHarnessLayer } from "./runtimeHarnessLayer";
 import { makeRuntimePathGuardLayer } from "./runtimePathGuardLayer";
 import type { SessionRuntime } from "./SessionRuntimeService";
-import type { SessionMetadataError } from "./sessionID";
-import type { SessionRuntimeConfig } from "./types";
+import { getSessionID, type SessionMetadataError } from "./sessionID";
+import type { AgentHarnessFactoryError, SessionRuntimeConfig } from "./types";
+
+const normalizeRuntimeRoots = (
+  config: SessionRuntimeConfig,
+): SessionRuntimeConfig => ({
+  ...config,
+  roots: withPrimaryRoot({
+    cwd: config.cwd,
+    roots: config.roots,
+    sessionID: "",
+  }),
+});
 
 export const makeSessionRuntimeLayer = (
   config: SessionRuntimeConfig,
@@ -26,15 +43,24 @@ export const makeSessionRuntimeLayer = (
   | QuestionService
   | PathGuard
   | ToolWorkspace,
-  ExecutionEnvProviderError | PlatformError | SessionMetadataError,
+  | AgentHarnessFactoryError
+  | ExecutionEnvProviderError
+  | PlatformError
+  | SessionMetadataError,
   | AgentHarnessFactory
   | ExecutionEnvProvider
   | FileSystem.FileSystem
   | EffectPath.Path
 > =>
-  Layer.mergeAll(
-    makeRuntimeHarnessLayer(config),
-    QuestionService.Live,
-    makeRuntimePathGuardLayer(config),
-    ToolWorkspace.layer({ cwd: config.cwd }),
+  Layer.unwrap(
+    Effect.gen(function* () {
+      const sessionID = yield* getSessionID(config.session);
+      const runtimeConfig = normalizeRuntimeRoots(config);
+      return Layer.mergeAll(
+        makeRuntimeHarnessLayer(runtimeConfig, sessionID),
+        QuestionService.Live,
+        makeRuntimePathGuardLayer(runtimeConfig, sessionID),
+        ToolWorkspace.layer({ cwd: runtimeConfig.cwd }),
+      );
+    }),
   );

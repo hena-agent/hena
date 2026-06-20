@@ -1,7 +1,10 @@
 import { assert, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, Stream } from "effect";
+import { Deferred, Effect, Fiber, PubSub, Stream } from "effect";
 
+import { closeStore } from "./lifecycle";
 import { makePendingRequestRegistry } from "./makePendingRequestRegistry";
+import { makePendingRequestStore } from "./store";
+import type { PendingRequestRegistryOptions } from "./types";
 
 interface Input {
   readonly label: string;
@@ -17,21 +20,30 @@ type Event =
   | { readonly type: "resolved"; readonly requestID: string }
   | { readonly type: "rejected"; readonly requestID: string };
 
+const registryOptions: PendingRequestRegistryOptions<
+  Input,
+  Request,
+  string,
+  Event
+> = {
+  idPrefix: "req",
+  makeRequest: (id: string, input: Input): Request => ({
+    id,
+    label: input.label,
+  }),
+  askedEvent: (request: Request): Event => ({ type: "asked", request }),
+  rejectOnShutdown: (request: Request) => ({
+    failure: "closed",
+    event: { type: "rejected", requestID: request.id },
+  }),
+};
+
 const makeRegistry = (): ReturnType<
   typeof makePendingRequestRegistry<Input, Request, string, string, Event>
 > =>
-  makePendingRequestRegistry<Input, Request, string, string, Event>({
-    idPrefix: "req",
-    makeRequest: (id: string, input: Input): Request => ({
-      id,
-      label: input.label,
-    }),
-    askedEvent: (request: Request): Event => ({ type: "asked", request }),
-    rejectOnShutdown: (request: Request) => ({
-      failure: "closed",
-      event: { type: "rejected", requestID: request.id },
-    }),
-  });
+  makePendingRequestRegistry<Input, Request, string, string, Event>(
+    registryOptions,
+  );
 
 it.effect("tracks pending requests and resolves entries", () =>
   Effect.scoped(
@@ -81,6 +93,33 @@ it.effect("fails entries and rejects pending requests on scope close", () =>
     ).pipe(Effect.flatMap(Fiber.join), Effect.exit);
 
     assert.strictEqual(rejectExit._tag, "Failure");
+  }),
+);
+
+it.effect("fails new requests after the registry scope closes", () =>
+  Effect.gen(function* () {
+    const registry = yield* Effect.scoped(makeRegistry());
+    const exit = yield* registry.ask({ label: "late" }).pipe(Effect.exit);
+
+    assert.strictEqual(exit._tag, "Failure");
+  }),
+);
+
+it.effect("ignores repeated registry close calls", () =>
+  Effect.gen(function* () {
+    const events = yield* PubSub.unbounded<Event>();
+    const store = makePendingRequestStore<
+      Input,
+      Request,
+      string,
+      string,
+      Event
+    >(registryOptions, events);
+
+    yield* closeStore(store);
+    yield* closeStore(store);
+
+    assert.strictEqual(store.closed, true);
   }),
 );
 

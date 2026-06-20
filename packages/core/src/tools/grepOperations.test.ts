@@ -8,12 +8,19 @@ import {
   makeIncludeMatcher,
 } from "./grepOperations";
 
-it("matches include globs against relative paths and basenames", () => {
-  assert.strictEqual(makeIncludeMatcher()("src/a.ts", "a.ts"), true);
-  assert.strictEqual(makeIncludeMatcher("src/*.ts")("src/a.ts", "a.ts"), true);
-  assert.strictEqual(makeIncludeMatcher("*.ts")("src/a.ts", "a.ts"), true);
-  assert.strictEqual(makeIncludeMatcher("*.md")("src/a.ts", "a.ts"), false);
-});
+it.effect("matches include globs against relative paths and basenames", () =>
+  Effect.gen(function* () {
+    const all = yield* makeIncludeMatcher();
+    const nested = yield* makeIncludeMatcher("src/*.ts");
+    const basename = yield* makeIncludeMatcher("*.ts");
+    const miss = yield* makeIncludeMatcher("*.md");
+
+    assert.strictEqual(all("src/a.ts", "a.ts"), true);
+    assert.strictEqual(nested("src/a.ts", "a.ts"), true);
+    assert.strictEqual(basename("src/a.ts", "a.ts"), true);
+    assert.strictEqual(miss("src/a.ts", "a.ts"), false);
+  }),
+);
 
 it.effect(
   "truncates before reading another file when the limit is reached",

@@ -1,9 +1,10 @@
-import { Deferred, Effect, PubSub, Stream } from "effect";
+import { Effect, PubSub, Stream } from "effect";
 
-import { PendingRequestRegistryState } from "./PendingRequestRegistryState";
-import { settlePendingRequest } from "./settlePendingRequest";
+import { failPendingRequest } from "./fail";
+import { askPendingRequest, closeStore, listRequests } from "./lifecycle";
+import { makePendingRequestStore } from "./store";
+import { succeedPendingRequest } from "./succeed";
 import type {
-  PendingRequestEntry,
   PendingRequestFailure,
   PendingRequestRegistry,
   PendingRequestRegistryOptions,
@@ -19,57 +20,35 @@ export const makePendingRequestRegistry = Effect.fnUntraced(function* <
 >(options: PendingRequestRegistryOptions<Input, Request, Failure, Event>) {
   type Registry = PendingRequestRegistry<Input, Request, Value, Failure, Event>;
   const events = yield* PubSub.unbounded<Event>();
-  const state = new PendingRequestRegistryState<
-    Input,
-    Request,
-    Value,
-    Failure,
-    Event
-  >(options, events);
+  const store = makePendingRequestStore<Input, Request, Value, Failure, Event>(
+    options,
+    events,
+  );
 
-  yield* Effect.addFinalizer(() => state.close());
+  yield* Effect.addFinalizer(() => closeStore(store));
 
-  const succeed = <NotFound, MakeSuccess>(
-    requestID: string,
-    notFound: NotFound,
-    makeSuccess: (
-      request: Request,
-    ) => Effect.Effect<PendingRequestSuccess<Value, Event>, MakeSuccess>,
-  ): Effect.Effect<void, NotFound | MakeSuccess> =>
-    settlePendingRequest({
-      context: state.settlementContext(),
-      requestID,
-      notFound,
-      makeSettlement: makeSuccess,
-      completeDeferred: (
-        entry: PendingRequestEntry<Request, Value, Failure>,
-        success: PendingRequestSuccess<Value, Event>,
-      ) => Deferred.succeed(entry.deferred, success.value),
-    });
-
-  const fail = <NotFound, MakeFailure>(
+  const ask: Registry["ask"] = (input: Input) =>
+    askPendingRequest(store, input);
+  const fail: Registry["fail"] = <NotFound, MakeFailure>(
     requestID: string,
     notFound: NotFound,
     makeFailure: (
       request: Request,
     ) => Effect.Effect<PendingRequestFailure<Failure, Event>, MakeFailure>,
-  ): Effect.Effect<void, NotFound | MakeFailure> =>
-    settlePendingRequest({
-      context: state.settlementContext(),
-      requestID,
-      notFound,
-      makeSettlement: makeFailure,
-      completeDeferred: (
-        entry: PendingRequestEntry<Request, Value, Failure>,
-        failure: PendingRequestFailure<Failure, Event>,
-      ) => Deferred.fail(entry.deferred, failure.failure),
-    });
+  ) => failPendingRequest(store, requestID, notFound, makeFailure);
+  const succeed: Registry["succeed"] = <NotFound, MakeSuccess>(
+    requestID: string,
+    notFound: NotFound,
+    makeSuccess: (
+      request: Request,
+    ) => Effect.Effect<PendingRequestSuccess<Value, Event>, MakeSuccess>,
+  ) => succeedPendingRequest(store, requestID, notFound, makeSuccess);
 
   return {
-    ask: state.ask.bind(state),
+    ask,
     events: Stream.fromPubSub(events),
     fail,
-    list: state.list.bind(state),
+    list: () => listRequests(store),
     succeed,
   } satisfies Registry;
 });

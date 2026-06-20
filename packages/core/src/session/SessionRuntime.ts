@@ -2,6 +2,7 @@ import { Effect, Layer, LayerMap } from "effect";
 
 import { makeSessionRuntimeLayer } from "./runtimeLayer";
 import { SessionRuntimeLoader } from "./SessionRuntimeLoader";
+import type { SessionRuntimeLoadError } from "./types";
 
 export { AgentHarnessFactory } from "./AgentHarnessFactory";
 export { SessionRuntimeLoader } from "./SessionRuntimeLoader";
@@ -18,7 +19,7 @@ type BuiltSessionRuntimeLayer = ReturnType<typeof makeSessionRuntimeLayer>;
 
 type LookupSessionRuntimeLayer = Layer.Layer<
   Layer.Success<BuiltSessionRuntimeLayer>,
-  unknown,
+  Layer.Error<BuiltSessionRuntimeLayer> | SessionRuntimeLoadError,
   Layer.Services<BuiltSessionRuntimeLayer> | SessionRuntimeLoader
 >;
 

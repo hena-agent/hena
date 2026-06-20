@@ -7,6 +7,7 @@ import {
   makeServiceExecuteAgentTool,
   type ToolShape,
 } from "./serviceAgentTool";
+import { ToolHttpError } from "./toolErrors";
 
 const WebfetchToolParameters = Schema.Struct({
   url: Schema.String.annotate({ description: "The URL to fetch" }),
@@ -27,14 +28,20 @@ export type WebfetchToolShape = ToolShape<
 
 const encoder = new TextEncoder();
 
+const httpError = (error: unknown): ToolHttpError =>
+  new ToolHttpError({ message: String(error) });
+
 const makeWebfetchTool = Effect.fnUntraced(function* () {
   const client = yield* HttpClient.HttpClient;
   return {
     execute: Effect.fnUntraced(function* (params: WebfetchToolParameters) {
       const response = yield* client
         .get(params.url)
-        .pipe(Effect.flatMap(HttpClientResponse.filterStatusOk));
-      const text = yield* response.text;
+        .pipe(
+          Effect.flatMap(HttpClientResponse.filterStatusOk),
+          Effect.mapError(httpError),
+        );
+      const text = yield* response.text.pipe(Effect.mapError(httpError));
       return {
         content: [{ type: "text", text }],
         details: {

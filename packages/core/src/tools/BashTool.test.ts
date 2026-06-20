@@ -65,12 +65,13 @@ it.effect("runs shell commands in the workspace cwd", () => {
   );
 });
 
-it.effect("fails non-zero shell commands", () =>
+it.effect("returns non-zero shell exits as tool output", () =>
   Effect.gen(function* () {
     const tool = yield* BashTool;
-    const exit = yield* tool.execute({ command: "exit 1" }).pipe(Effect.exit);
+    const result = yield* tool.execute({ command: "exit 1" });
 
-    assert.strictEqual(exit._tag, "Failure");
+    assert.deepStrictEqual(result.content, [{ type: "text", text: "boom" }]);
+    assert.strictEqual(result.details.exitCode, 1);
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeSpawner("boom", 1, [])),

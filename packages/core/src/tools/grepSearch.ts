@@ -45,7 +45,7 @@ export const executeGrepSearch = Effect.fnUntraced(function* (
 ) {
   const { authorize, fs, params, pathService, root } = input;
   const pattern = yield* compilePattern(params.pattern);
-  const matchesInclude = makeIncludeMatcher(params.include);
+  const matchesInclude = yield* makeIncludeMatcher(params.include);
   const candidates = yield* searchFiles(fs, pathService, root, {
     authorize,
     limit: maxGrepFiles,

@@ -5,6 +5,7 @@ import { assert, it } from "@effect/vitest";
 import { Effect, Schema } from "effect";
 
 import { makeAgentTool } from "./schema";
+import { ToolInputError } from "./toolErrors";
 
 interface EchoParams {
   readonly text: string;
@@ -74,12 +75,12 @@ it("decodes raw tool arguments before executing tool logic", async () => {
     },
   });
 
-  const rejected = await tool.execute("call-1", { count: 1 }).then(
-    () => false,
-    () => true,
+  const rejection = await tool.execute("call-1", { count: 1 }).then(
+    () => undefined,
+    (error: unknown) => error,
   );
 
-  assert.strictEqual(rejected, true);
+  assert.ok(rejection instanceof ToolInputError);
   assert.strictEqual(executed, false);
 
   const result = await tool.execute("call-2", { text: "hello" });

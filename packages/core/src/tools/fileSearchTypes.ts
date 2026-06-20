@@ -14,6 +14,17 @@ export type FileSearchAuthorize = (
   kind: FileSearchTargetKind,
 ) => Effect.Effect<{ readonly canonicalPath: string }, ToolExecutionError>;
 
+export type FileSearchVisitDirectory = (
+  directory: string,
+  prefix: string,
+) => Effect.Effect<void, ToolExecutionError>;
+
+export type FileSearchVisitEntry = (
+  directory: string,
+  prefix: string,
+  entry: string,
+) => Effect.Effect<void, ToolExecutionError>;
+
 export interface FileSearchOptions {
   readonly authorize?: FileSearchAuthorize | undefined;
   readonly limit: number;

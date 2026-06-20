@@ -11,7 +11,7 @@ export interface ShellExecutorShape {
   readonly execute: (
     command: string,
     cwd: string,
-  ) => Effect.Effect<ShellExecutionResult, Error | PlatformError>;
+  ) => Effect.Effect<ShellExecutionResult, PlatformError>;
 }
 
 const collectOutput = (
@@ -29,9 +29,6 @@ const makeShellExecutor = Effect.fnUntraced(function* () {
           const handle = yield* spawner.spawn(command);
           const output = yield* collectOutput(handle);
           const exitCode = Number(yield* handle.exitCode);
-          if (exitCode !== 0) {
-            return yield* Effect.fail(new Error(output));
-          }
           return { output, exitCode } satisfies ShellExecutionResult;
         }),
       );

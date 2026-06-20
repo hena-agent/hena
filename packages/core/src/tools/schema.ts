@@ -5,7 +5,7 @@ import {
   type AgentToolParameters,
   toAgentToolParameters,
 } from "./jsonSchemaParameters";
-import type { ToolExecutionError } from "./toolErrors";
+import { type ToolExecutionError, ToolInputError } from "./toolErrors";
 
 export type { ToolExecutionError } from "./toolErrors";
 
@@ -72,7 +72,11 @@ export const makeAgentTool = <
       Effect.gen(function* () {
         const decoded = yield* Schema.decodeUnknownEffect(
           definition.parameters,
-        )(params);
+        )(params).pipe(
+          Effect.mapError(
+            (error: unknown) => new ToolInputError({ message: String(error) }),
+          ),
+        );
         const input = {
           toolCallId,
           params: decoded,

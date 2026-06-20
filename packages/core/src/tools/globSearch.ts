@@ -5,7 +5,7 @@ import type {
   FileSearchCandidate,
 } from "./fileSearchTypes";
 import { searchFiles } from "./files";
-import { compileGlob } from "./globMatch";
+import { compileGlobEffect } from "./globMatch";
 
 interface GlobSearchParameters {
   readonly pattern: string;
@@ -30,7 +30,7 @@ export const executeGlobSearch = Effect.fnUntraced(function* (
   input: GlobSearchInput,
 ) {
   const { authorize, fs, params, pathService, root } = input;
-  const matchesPattern = compileGlob(params.pattern);
+  const matchesPattern = yield* compileGlobEffect(params.pattern);
   const matches = yield* searchFiles(fs, pathService, root, {
     authorize,
     limit: maxGlobMatches,

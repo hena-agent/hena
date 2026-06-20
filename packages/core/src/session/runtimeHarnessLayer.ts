@@ -20,9 +20,12 @@ import type { HarnessServiceShape } from "../harness/types";
 import { collectProjectInstructions } from "../systemPrompt/projectInstructions";
 import { AgentHarnessFactory } from "./AgentHarnessFactory";
 import { SessionRuntime } from "./SessionRuntimeService";
-import { getSessionID, type SessionMetadataError } from "./sessionID";
 import { mergeRuntimeSystemPromptConfig } from "./systemPromptConfig";
-import type { SessionRuntimeConfig, SessionRuntimeShape } from "./types";
+import type {
+  AgentHarnessFactoryError,
+  SessionRuntimeConfig,
+  SessionRuntimeShape,
+} from "./types";
 
 const runtimeContext = (
   service: SessionRuntimeShape,
@@ -35,9 +38,10 @@ const runtimeContext = (
 
 export const makeRuntimeHarnessLayer = (
   config: SessionRuntimeConfig,
+  sessionID: string,
 ): Layer.Layer<
   SessionRuntime | HarnessService,
-  ExecutionEnvProviderError | PlatformError | SessionMetadataError,
+  AgentHarnessFactoryError | ExecutionEnvProviderError | PlatformError,
   | AgentHarnessFactory
   | ExecutionEnvProvider
   | FileSystem.FileSystem
@@ -47,7 +51,6 @@ export const makeRuntimeHarnessLayer = (
     Effect.gen(function* () {
       const envProvider = yield* ExecutionEnvProvider;
       const factory = yield* AgentHarnessFactory;
-      const sessionID = yield* getSessionID(config.session);
       const bridge = yield* makeHarnessEventBridge();
       const projectInstructions = yield* collectProjectInstructions(config);
       const systemPrompt = mergeRuntimeSystemPromptConfig(

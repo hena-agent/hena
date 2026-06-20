@@ -3,20 +3,19 @@ import type { PlatformError } from "effect/PlatformError";
 
 import { PathGuard } from "../path/PathGuard";
 import { PermissionService } from "../permission/PermissionService";
-import { getSessionID, type SessionMetadataError } from "./sessionID";
 import type { SessionRuntimeConfig } from "./types";
 
 export const makeRuntimePathGuardLayer = (
   config: SessionRuntimeConfig,
+  sessionID: string,
 ): Layer.Layer<
   PathGuard | PermissionService,
-  PlatformError | SessionMetadataError,
+  PlatformError,
   FileSystem.FileSystem | EffectPath.Path
 > =>
   Layer.unwrap(
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
-      const sessionID = yield* getSessionID(config.session);
       return PathGuard.layer({
         sessionID,
         roots: config.roots,

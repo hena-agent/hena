@@ -1,77 +1,92 @@
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, PubSub } from "effect";
 
-import type { RequestLifecycleContext } from "./contexts";
-import type { PendingRequestEntry } from "./types";
+import { type PendingRequestStore, publish, rejectEntries } from "./store";
 
-export const rejectEntries = <
+export const listRequests = <
   Input,
   Request extends { readonly id: string },
   Value,
   Failure,
   Event,
 >(
-  context: RequestLifecycleContext<Input, Request, Value, Failure, Event>,
-  entries: Iterable<PendingRequestEntry<Request, Value, Failure>>,
-): Effect.Effect<void> =>
-  Effect.forEach(
-    entries,
-    (entry) => {
-      const failure = context.options.rejectOnShutdown(entry.request);
-      return context
-        .publishSettlement(failure)
-        .pipe(
-          Effect.andThen(Deferred.fail(entry.deferred, failure.failure)),
-          Effect.asVoid,
-        );
-    },
-    { discard: true },
-  ).pipe(Effect.asVoid);
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
+): Effect.Effect<ReadonlyArray<Request>> =>
+  Effect.sync(() =>
+    Array.from(store.pending.values(), (entry) => entry.request),
+  );
 
-const rejectInterruptedEntry = <
+const rejectInterrupted = <
   Input,
   Request extends { readonly id: string },
   Value,
   Failure,
   Event,
 >(
-  context: RequestLifecycleContext<Input, Request, Value, Failure, Event>,
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
   requestID: string,
 ): Effect.Effect<void> =>
   Effect.sync(() => {
-    const entry = context.pending.get(requestID);
-    context.pending.delete(requestID);
+    const entry = store.pending.get(requestID);
+    store.pending.delete(requestID);
     return entry;
   }).pipe(
     Effect.flatMap((entry) =>
-      entry === undefined ? Effect.void : rejectEntries(context, [entry]),
+      entry === undefined ? Effect.void : rejectEntries(store, [entry]),
     ),
     Effect.uninterruptible,
   );
 
-export const askPendingRequest = <
+export const askPendingRequest = Effect.fnUntraced(function* <
   Input,
   Request extends { readonly id: string },
   Value,
   Failure,
   Event,
 >(
-  context: RequestLifecycleContext<Input, Request, Value, Failure, Event>,
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
   input: Input,
-): Effect.Effect<Value, Failure> =>
-  Effect.gen(function* () {
-    const id = context.allocateID();
-    const deferred = yield* Deferred.make<Value, Failure>();
-    const request = context.options.makeRequest(id, input);
-    const install = Effect.sync(() => {
-      context.pending.set(id, { deferred, request });
-    }).pipe(
-      Effect.andThen(context.publish(context.options.askedEvent(request))),
-      Effect.uninterruptible,
-    );
+) {
+  const id = `${store.options.idPrefix}-${store.nextID}`;
+  store.nextID += 1;
+  const deferred = yield* Deferred.make<Value, Failure>();
+  const request = store.options.makeRequest(id, input);
+  const installed = yield* Effect.sync(() => {
+    if (store.closed) {
+      return false;
+    }
+    store.pending.set(id, { deferred, request });
+    return true;
+  }).pipe(Effect.uninterruptible);
+  if (!installed) {
+    return yield* Effect.fail(store.options.rejectOnShutdown(request).failure);
+  }
 
-    return yield* install.pipe(
-      Effect.andThen(Deferred.await(deferred)),
-      Effect.onInterrupt(() => rejectInterruptedEntry(context, id)),
-      Effect.ensuring(Effect.sync(() => context.pending.delete(id))),
-    );
-  });
+  return yield* publish(store, store.options.askedEvent(request)).pipe(
+    Effect.andThen(Deferred.await(deferred)),
+    Effect.onInterrupt(() => rejectInterrupted(store, id)),
+    Effect.ensuring(Effect.sync(() => store.pending.delete(id))),
+  );
+});
+
+export const closeStore = <
+  Input,
+  Request extends { readonly id: string },
+  Value,
+  Failure,
+  Event,
+>(
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
+): Effect.Effect<void> =>
+  Effect.sync(() => {
+    if (store.closed) {
+      return [];
+    }
+    store.closed = true;
+    const entries = Array.from(store.pending.values());
+    store.pending.clear();
+    return entries;
+  }).pipe(
+    Effect.flatMap((entries) => rejectEntries(store, entries)),
+    Effect.andThen(PubSub.shutdown(store.events)),
+    Effect.asVoid,
+  );

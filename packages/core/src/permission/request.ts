@@ -15,9 +15,9 @@ export const makeRequest = (
     id,
     sessionID: input.sessionID,
     permission: input.permission,
-    patterns: input.patterns,
-    always: input.always,
-    metadata: input.metadata,
+    patterns: [...input.patterns],
+    always: [...input.always],
+    metadata: { ...input.metadata },
   } satisfies PermissionRequest;
 
   return input.tool === undefined ? request : { ...request, tool: input.tool };

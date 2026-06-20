@@ -191,7 +191,7 @@ it.effect("stops visiting a directory after truncation", () =>
   ),
 );
 
-it.effect("authorizes only matching file candidates", () =>
+it.effect("authorizes directories and matching file candidates", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* EffectPath.Path;
@@ -199,15 +199,18 @@ it.effect("authorizes only matching file candidates", () =>
     const result = yield* searchFiles(fs, pathService, "/workspace", {
       limit: 10,
       matches: (candidate) => candidate.relativePath.endsWith(".ts"),
-      authorize: (path) =>
+      authorize: (path, kind) =>
         Effect.sync(() => {
-          authorized.push(path);
+          authorized.push(`${kind}:${path}`);
           return { canonicalPath: path };
         }),
     });
 
     assert.deepStrictEqual(result.files, ["/workspace/a.ts"]);
-    assert.deepStrictEqual(authorized, ["/workspace/a.ts"]);
+    assert.deepStrictEqual(authorized, [
+      "directory:/workspace",
+      "file:/workspace/a.ts",
+    ]);
   }).pipe(
     Effect.provide(
       FileSystem.layerNoop({
@@ -221,3 +224,42 @@ it.effect("authorizes only matching file candidates", () =>
     Effect.provide(EffectPath.layer),
   ),
 );
+
+it.effect("authorizes symlinked directories before reading them", () => {
+  const readDirectories: Array<string> = [];
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const result = yield* searchFiles(fs, pathService, "/workspace", {
+      limit: 10,
+      matches: matchAll,
+      authorize: (path, kind) =>
+        Effect.succeed({
+          canonicalPath:
+            kind === "directory" && path.startsWith("/workspace/link")
+              ? "/external"
+              : path,
+        }),
+    });
+
+    assert.deepStrictEqual(result.files, ["/external/secret.ts"]);
+    assert.deepStrictEqual(readDirectories, ["/workspace", "/external"]);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readDirectory: (path) =>
+          Effect.sync(() => {
+            readDirectories.push(path);
+            return path === "/workspace"
+              ? ["link", "link-again"]
+              : ["secret.ts"];
+          }),
+        stat: (path) =>
+          Effect.succeed(
+            path.endsWith(".ts") ? info("File") : info("Directory"),
+          ),
+      }),
+    ),
+    Effect.provide(EffectPath.layer),
+  );
+});

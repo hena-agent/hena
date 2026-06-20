@@ -1,5 +1,7 @@
 import { Effect } from "effect";
 
+import { ToolInputError } from "./toolErrors";
+
 const countOccurrences = (content: string, search: string): number => {
   if (search === "") {
     return 0;
@@ -26,14 +28,20 @@ export const editContent = (
   newString: string,
 ): Effect.Effect<
   { readonly content: string; readonly replacements: number },
-  Error
+  ToolInputError
 > => {
   const occurrences = countOccurrences(content, oldString);
   if (occurrences === 0) {
-    return Effect.fail(new Error("String to replace was not found."));
+    return Effect.fail(
+      new ToolInputError({ message: "String to replace was not found." }),
+    );
   }
   if (occurrences > 1) {
-    return Effect.fail(new Error("String to replace appears more than once."));
+    return Effect.fail(
+      new ToolInputError({
+        message: "String to replace appears more than once.",
+      }),
+    );
   }
   return Effect.succeed({
     content: content.replace(oldString, () => newString),

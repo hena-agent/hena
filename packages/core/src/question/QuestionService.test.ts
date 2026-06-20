@@ -152,3 +152,44 @@ it.effect("rejects pending questions when the service scope closes", () =>
     assert.strictEqual(exit._tag, "Failure");
   }),
 );
+
+it.effect("snapshots question request inputs", () =>
+  Effect.gen(function* () {
+    const service = yield* QuestionService;
+    const option = { label: "Yes", description: "Continue" };
+    const options = [option];
+    const question = {
+      question: "Continue?",
+      header: "Continue",
+      options,
+      custom: true,
+      multiple: false,
+    };
+    const questions = [question];
+    const fiber = yield* service
+      .ask({ sessionID: "session-1", questions })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    question.question = "Mutated?";
+    option.label = "No";
+    options.push({ label: "Maybe", description: "Mutated" });
+    yield* Effect.yieldNow;
+    const [pending] = yield* service.list();
+    if (pending === undefined) {
+      throw new Error("expected a pending question request");
+    }
+
+    assert.deepStrictEqual(pending.questions, [
+      {
+        question: "Continue?",
+        header: "Continue",
+        options: [{ label: "Yes", description: "Continue" }],
+        custom: true,
+        multiple: false,
+      },
+    ]);
+
+    yield* service.reject(pending.id);
+    yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(Effect.provide(QuestionService.Live)),
+);

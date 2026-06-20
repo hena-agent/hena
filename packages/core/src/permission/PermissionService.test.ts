@@ -159,3 +159,37 @@ it.effect("denies pending permissions when the service scope closes", () =>
     assert.strictEqual(exit._tag, "Failure");
   }),
 );
+
+it.effect("snapshots permission request inputs", () =>
+  Effect.gen(function* () {
+    const service = yield* PermissionService;
+    const patterns = ["/outside/*"];
+    const always = ["/outside/*"];
+    const metadata = { filepath: "/outside/file.txt" };
+    const fiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        patterns,
+        always,
+        metadata,
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    patterns.push("/mutated/*");
+    always.push("/mutated/*");
+    metadata.filepath = "/mutated/file.txt";
+    yield* Effect.yieldNow;
+    const [pending] = yield* service.list();
+    if (pending === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+
+    assert.deepStrictEqual(pending.patterns, ["/outside/*"]);
+    assert.deepStrictEqual(pending.always, ["/outside/*"]);
+    assert.deepStrictEqual(pending.metadata, { filepath: "/outside/file.txt" });
+
+    yield* service.deny({ requestID: pending.id });
+    yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(Effect.provide(PermissionService.Live)),
+);

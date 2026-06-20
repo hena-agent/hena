@@ -2,12 +2,21 @@ import { assert, it } from "@effect/vitest";
 import { Effect } from "effect";
 
 import { editContent } from "./editOperations";
+import { ToolInputError } from "./toolErrors";
 
 it.effect("rejects an empty search string", () =>
   Effect.gen(function* () {
-    const exit = yield* editContent("content", "", "next").pipe(Effect.exit);
+    const error = yield* editContent("content", "", "next").pipe(Effect.flip);
 
-    assert.strictEqual(exit._tag, "Failure");
+    assert.ok(error instanceof ToolInputError);
+  }),
+);
+
+it.effect("rejects ambiguous search strings with typed input errors", () =>
+  Effect.gen(function* () {
+    const error = yield* editContent("x x", "x", "y").pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
   }),
 );
 

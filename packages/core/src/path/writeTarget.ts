@@ -1,5 +1,7 @@
 import { Effect, type Path as EffectPath, Option } from "effect";
-import type { PlatformError } from "effect/PlatformError";
+import { type PlatformError, systemError } from "effect/PlatformError";
+
+const maxSymlinkDepth = 40;
 
 interface ResolveWriteTargetInput {
   readonly canonicalize: (path: string) => Effect.Effect<string, PlatformError>;
@@ -20,8 +22,9 @@ const resolveCreateTarget = Effect.fnUntraced(function* (
 
 const resolveSymlinkTarget = Effect.fnUntraced(function* (
   input: ResolveWriteTargetInput,
+  path: string,
 ) {
-  const target = yield* Effect.option(input.readLink(input.path));
+  const target = yield* Effect.option(input.readLink(path));
   if (Option.isNone(target)) {
     return Option.none<string>();
   }
@@ -29,12 +32,38 @@ const resolveSymlinkTarget = Effect.fnUntraced(function* (
     return Option.some(target.value);
   }
   return Option.some(
-    input.pathService.resolve(
-      input.pathService.dirname(input.path),
-      target.value,
-    ),
+    input.pathService.resolve(input.pathService.dirname(path), target.value),
   );
 });
+
+const resolveMissingTarget: (
+  input: ResolveWriteTargetInput,
+  path: string,
+  depth: number,
+) => Effect.Effect<string, PlatformError> = Effect.fnUntraced(
+  function* (input, path, depth) {
+    if (depth >= maxSymlinkDepth) {
+      return yield* Effect.fail(
+        systemError({
+          _tag: "InvalidData",
+          module: "FileSystem",
+          method: "readLink",
+          pathOrDescriptor: path,
+        }),
+      );
+    }
+
+    const target = yield* resolveSymlinkTarget(input, path);
+    if (Option.isNone(target)) {
+      return yield* resolveCreateTarget({ ...input, path });
+    }
+    const exists = yield* input.pathExists(target.value);
+    if (exists) {
+      return yield* input.canonicalize(target.value);
+    }
+    return yield* resolveMissingTarget(input, target.value, depth + 1);
+  },
+);
 
 export const resolveWriteTarget = Effect.fnUntraced(function* (
   input: ResolveWriteTargetInput,
@@ -43,9 +72,5 @@ export const resolveWriteTarget = Effect.fnUntraced(function* (
   if (exists) {
     return yield* input.canonicalize(input.path);
   }
-  const target = yield* resolveSymlinkTarget(input);
-  if (Option.isSome(target)) {
-    return yield* resolveCreateTarget({ ...input, path: target.value });
-  }
-  return yield* resolveCreateTarget(input);
+  return yield* resolveMissingTarget(input, input.path, 0);
 });

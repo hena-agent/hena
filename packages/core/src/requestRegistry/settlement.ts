@@ -1,6 +1,7 @@
 import { Deferred, Effect } from "effect";
 
 import { type PendingRequestStore, publishSettlement } from "./store";
+import { takePending } from "./takePending";
 import type { PendingRequestEntry, PendingRequestSettlement } from "./types";
 
 interface SettlePendingRequestInput<
@@ -25,28 +26,6 @@ interface SettlePendingRequestInput<
   readonly store: PendingRequestStore<Input, Request, Value, Failure, Event>;
 }
 
-const claim = <
-  Request extends { readonly id: string },
-  Value,
-  Failure,
-  NotFound,
->(
-  store: {
-    readonly pending: Map<string, PendingRequestEntry<Request, Value, Failure>>;
-  },
-  requestID: string,
-  notFound: NotFound,
-): Effect.Effect<PendingRequestEntry<Request, Value, Failure>, NotFound> =>
-  Effect.sync(() => {
-    const entry = store.pending.get(requestID);
-    store.pending.delete(requestID);
-    return entry;
-  }).pipe(
-    Effect.flatMap((entry) =>
-      entry === undefined ? Effect.fail(notFound) : Effect.succeed(entry),
-    ),
-  );
-
 export const settlePendingRequest = <
   Input,
   Request extends { readonly id: string },
@@ -69,11 +48,19 @@ export const settlePendingRequest = <
   >,
 ): Effect.Effect<void, NotFound | MakeSettlement> =>
   Effect.uninterruptibleMask((restore) =>
-    claim(input.store, input.requestID, input.notFound).pipe(
+    takePending(input.store, input.requestID).pipe(
+      Effect.flatMap((entry) =>
+        entry === undefined
+          ? Effect.fail(input.notFound)
+          : Effect.succeed(entry),
+      ),
       Effect.flatMap((entry) =>
         restore(input.makeSettlement(entry.request)).pipe(
           Effect.onError(() =>
             Effect.sync(() => {
+              if (input.store.cancelled.delete(input.requestID)) {
+                return undefined;
+              }
               if (!input.store.closed) {
                 input.store.pending.set(input.requestID, entry);
                 return undefined;
@@ -90,6 +77,11 @@ export const settlePendingRequest = <
           ),
           Effect.flatMap((settlement) =>
             publishSettlement(input.store, settlement).pipe(
+              Effect.andThen(
+                Effect.sync(() => {
+                  input.store.cancelled.delete(input.requestID);
+                }),
+              ),
               Effect.andThen(input.complete(entry, settlement)),
               Effect.asVoid,
             ),

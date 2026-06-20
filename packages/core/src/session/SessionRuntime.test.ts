@@ -3,6 +3,7 @@ import * as PiNode from "@earendil-works/pi-agent-core/node";
 import * as PiAi from "@earendil-works/pi-ai";
 import { assert, it } from "@effect/vitest";
 import { Effect, Path as EffectPath, FileSystem, Layer, Option } from "effect";
+import { systemError } from "effect/PlatformError";
 import { TestClock } from "effect/testing";
 
 import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
@@ -347,7 +348,16 @@ it.effect("detects runtime path guard target kinds from filesystem stat", () =>
         FileSystem.layerNoop({
           exists: (path) => Effect.succeed(path === "/repo/file.ts"),
           readLink: (path) =>
-            Effect.succeed(path === "/repo/link.ts" ? "target.ts" : path),
+            path === "/repo/link.ts"
+              ? Effect.succeed("target.ts")
+              : Effect.fail(
+                  systemError({
+                    _tag: "NotFound",
+                    module: "FileSystem",
+                    method: "readLink",
+                    pathOrDescriptor: path,
+                  }),
+                ),
           realPath: (path) => Effect.succeed(path),
           stat: (path) =>
             Effect.succeed(fileInfo(path === "/repo" ? "Directory" : "File")),

@@ -64,6 +64,7 @@ class FakeHarness implements HarnessLike {
   compactGate: Promise<void> | undefined;
   followUpMode: PiAgent.QueueMode = "all";
   model: PiAi.Model<PiAi.Api> = modelOne;
+  nextTurnGate: Promise<void> | undefined;
   promptGate: Promise<void> | undefined;
   resources: PiAgent.AgentHarnessResources = {};
   steeringMode: PiAgent.QueueMode = "all";
@@ -109,7 +110,9 @@ class FakeHarness implements HarnessLike {
   }
 
   async nextTurn(text: string): Promise<void> {
-    await Promise.resolve();
+    if (this.nextTurnGate !== undefined) {
+      await this.nextTurnGate;
+    }
     this.calls.push(`nextTurn:${text}`);
   }
 
@@ -329,6 +332,36 @@ it.effect("serializes explicit skill and template invocations", () =>
   }),
 );
 
+it.effect("serializes next turns with structural harness operations", () =>
+  Effect.gen(function* () {
+    const harness = new FakeHarness();
+    const gate = makeGate();
+    harness.promptGate = gate.promise;
+    const service = yield* makeHarnessService(harness);
+
+    const promptFiber = yield* service
+      .prompt("one")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
+    const nextTurnFiber = yield* service
+      .nextTurn("two")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
+
+    assert.deepStrictEqual(harness.calls, ["prompt:start:one"]);
+
+    gate.open();
+    yield* Fiber.join(promptFiber);
+    yield* Fiber.join(nextTurnFiber);
+
+    assert.deepStrictEqual(harness.calls, [
+      "prompt:start:one",
+      "prompt:end:one",
+      "nextTurn:two",
+    ]);
+  }),
+);
+
 it.effect("lets steering operations bypass the structural permit", () =>
   Effect.gen(function* () {
     const harness = new FakeHarness();
@@ -457,6 +490,24 @@ it.effect("aborts the harness when a structural operation is interrupted", () =>
 
     const fiber = yield* service
       .prompt("one")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+    yield* Effect.yieldNow;
+    yield* Fiber.interrupt(fiber);
+    gate.open();
+
+    assert.strictEqual(harness.abortCalls, 1);
+  }),
+);
+
+it.effect("aborts the harness when nextTurn is interrupted", () =>
+  Effect.gen(function* () {
+    const harness = new FakeHarness();
+    const gate = makeGate();
+    harness.nextTurnGate = gate.promise;
+    const service = yield* makeHarnessService(harness);
+
+    const fiber = yield* service
+      .nextTurn("one")
       .pipe(Effect.forkDetach({ startImmediately: true }));
     yield* Effect.yieldNow;
     yield* Fiber.interrupt(fiber);

@@ -32,11 +32,19 @@ const configuredHeaders = (
   return Object.keys(headers).length === 0 ? undefined : headers;
 };
 
-const configuredEnvKey = (
+const configuredApiKey = (
   env: Readonly<Record<string, string>> | undefined,
   source: CredentialSource | undefined,
-): string | undefined =>
-  source?.envKey === undefined ? undefined : env?.[source.envKey];
+  provider: string,
+): string | undefined => {
+  if (source?.apiKey !== undefined) {
+    return source.apiKey;
+  }
+  if (source?.envKey !== undefined) {
+    return env?.[source.envKey];
+  }
+  return PiAi.getEnvApiKey(provider, env);
+};
 
 const withHeaders = (
   apiKey: string,
@@ -52,10 +60,7 @@ export const makeCredentialResolver = (
   ): Effect.Effect<ApiKeyAndHeaders | undefined> =>
     Effect.sync(() => {
       const source = config.providers?.[model.provider];
-      const apiKey =
-        source?.apiKey ??
-        configuredEnvKey(config.env, source) ??
-        PiAi.getEnvApiKey(model.provider, config.env);
+      const apiKey = configuredApiKey(config.env, source, model.provider);
       if (apiKey === undefined) {
         return undefined;
       }

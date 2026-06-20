@@ -65,6 +65,7 @@ export const grepFiles = Effect.fnUntraced(function* (
   limit: number,
 ) {
   const matches: Array<GrepMatch> = [];
+  let truncated = false;
   for (const file of files) {
     if (matches.length >= limit) {
       return { matches, truncated: true } satisfies GrepResult;
@@ -72,10 +73,13 @@ export const grepFiles = Effect.fnUntraced(function* (
     const result = yield* grepFile(fs, pattern, file, limit - matches.length);
     matches.push(...result.matches);
     if (result.truncated) {
-      return { matches, truncated: true } satisfies GrepResult;
+      truncated = true;
+      if (matches.length >= limit) {
+        return { matches, truncated } satisfies GrepResult;
+      }
     }
   }
-  return { matches, truncated: false } satisfies GrepResult;
+  return { matches, truncated } satisfies GrepResult;
 });
 
 export const formatMatches = (matches: ReadonlyArray<GrepMatch>): string => {

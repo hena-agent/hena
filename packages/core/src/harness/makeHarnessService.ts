@@ -63,7 +63,7 @@ export const makeHarnessService: (
       followUp: (...args: Args<"followUp">) =>
         runPromise(harness.followUp.bind(harness, ...args)),
       nextTurn: (...args: Args<"nextTurn">) =>
-        runPromise(harness.nextTurn.bind(harness, ...args)),
+        runStructural(harness.nextTurn.bind(harness, ...args)),
       abort: () => runPromise(harness.abort.bind(harness)),
       compact: (instructions?: string) =>
         mutate(harness.compact.bind(harness, instructions)),

@@ -30,7 +30,7 @@ it.effect("creates local harness execution environments", () =>
         shellPath: "/bin/sh",
       });
 
-      assert.deepStrictEqual(custom.roots, [cwd]);
+      assert.deepStrictEqual(custom.roots, []);
     }),
   ),
 );

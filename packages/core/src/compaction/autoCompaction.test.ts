@@ -109,6 +109,19 @@ it("falls back to estimating messages when no usage exists", () => {
   assert.strictEqual(context.overflow, false);
 });
 
+it("estimates context when entries were added after assistant usage", () => {
+  const context = getContextUsage({
+    activePathEntries: [
+      messageEntry("msg-1", assistantMessage(96_000)),
+      messageEntry("msg-2", userMessage("additional context")),
+    ],
+    model,
+  });
+
+  assert.strictEqual(context.source, "estimate");
+  assert.ok(context.tokens > 0);
+});
+
 it("does not overflow when disabled or context window is unknown", () => {
   assert.strictEqual(
     shouldAutoCompact(96_000, model, { compaction: { auto: false } }),

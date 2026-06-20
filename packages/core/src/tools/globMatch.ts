@@ -14,14 +14,11 @@ const BunGlobMatcherRuntime: GlobMatcherRuntime = {
 
 const compileGlob = (
   glob: string,
-  runtime: GlobMatcherRuntime = BunGlobMatcherRuntime,
+  runtime: GlobMatcherRuntime,
 ): ((path: string) => boolean) => {
   const pattern = runtime.compile(glob);
   return (path: string): boolean => pattern.match(path.replaceAll("\\", "/"));
 };
-
-export const matchesGlob = (glob: string, path: string): boolean =>
-  compileGlob(glob)(path);
 
 export const compileGlobEffect = (
   glob: string,

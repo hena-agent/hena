@@ -97,6 +97,34 @@ it.effect("snapshots model lists", () =>
   }),
 );
 
+it.effect(
+  "lets custom models explicitly override built-in catalog entries",
+  () =>
+    Effect.gen(function* () {
+      const registry = yield* makeModelRegistry({
+        providers: { openai: { models: ["gpt-4o-mini"] } },
+        customModels: [
+          {
+            provider: "openai",
+            id: "gpt-4o-mini",
+            name: "Custom mini",
+            baseUrl: "http://localhost:1234/v1",
+            contextWindow: 16,
+            maxTokens: 8,
+          },
+        ],
+      });
+      const [listed] = yield* registry.getModels("openai");
+      const resolved = yield* registry.getModel({
+        provider: "openai",
+        modelId: "gpt-4o-mini",
+      });
+
+      assert.strictEqual(listed?.name, "Custom mini");
+      assert.strictEqual(resolved.name, "Custom mini");
+    }),
+);
+
 it.effect("resolves models and reports filtered misses", () =>
   Effect.gen(function* () {
     const registry = yield* makeModelRegistry({

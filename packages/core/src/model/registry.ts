@@ -23,12 +23,18 @@ const accepts = (
 
 const listModels = (
   config: ModelTypes.ModelRegistryConfig,
-): ReadonlyArray<ModelTypes.HenaModel> => [
-  ...PiAi.getProviders()
+): ReadonlyArray<ModelTypes.HenaModel> => {
+  const models = new Map<string, ModelTypes.HenaModel>();
+  for (const builtIn of PiAi.getProviders()
     .flatMap((provider) => PiAi.getModels(provider))
-    .filter((model) => accepts(config, model)),
-  ...(config.customModels ?? []).map(toModel),
-];
+    .filter((model) => accepts(config, model))) {
+    models.set(`${builtIn.provider}\0${builtIn.id}`, builtIn);
+  }
+  for (const model of (config.customModels ?? []).map(toModel)) {
+    models.set(`${model.provider}\0${model.id}`, model);
+  }
+  return Array.from(models.values());
+};
 
 const findModel = (
   models: ReadonlyArray<ModelTypes.HenaModel>,

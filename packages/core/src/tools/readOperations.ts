@@ -1,16 +1,34 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Effect, type Path as EffectPath, type FileSystem } from "effect";
+import { Effect, type Path as EffectPath, FileSystem, Stream } from "effect";
 
 import type { ReadToolParameters } from "./ReadTool";
 import type { ReadToolDetails } from "./readDetails";
+
+const maxReadFileBytes = FileSystem.MiB(1);
+
+const readBoundedText = Effect.fnUntraced(function* (
+  fs: FileSystem.FileSystem,
+  path: string,
+) {
+  const info = yield* fs.stat(path);
+  const byteLimit = info.size > maxReadFileBytes ? maxReadFileBytes : info.size;
+  const text = yield* fs.stream(path, { bytesToRead: byteLimit }).pipe(
+    Stream.decodeText,
+    Stream.runFold(
+      () => "",
+      (body: string, chunk: string) => `${body}${chunk}`,
+    ),
+  );
+  return { text, truncated: info.size > maxReadFileBytes };
+});
 
 export const readFile = Effect.fnUntraced(function* (
   fs: FileSystem.FileSystem,
   path: string,
   params: ReadToolParameters,
 ) {
-  const text = yield* fs.readFileString(path);
-  const lines = text.split(/\r?\n/);
+  const file = yield* readBoundedText(fs, path);
+  const lines = file.text.split(/\r?\n/);
   const lineStart = params.offset ?? 1;
   const limit = params.limit ?? 2000;
   const selected = lines.slice(lineStart - 1, lineStart - 1 + limit);
@@ -25,7 +43,8 @@ export const readFile = Effect.fnUntraced(function* (
       lineStart,
       lineEnd: lineStart + selected.length - 1,
       totalLines: lines.length,
-      truncated: lineStart - 1 + selected.length < lines.length,
+      truncated:
+        file.truncated || lineStart - 1 + selected.length < lines.length,
     },
   } satisfies PiAgent.AgentToolResult<ReadToolDetails>;
 });

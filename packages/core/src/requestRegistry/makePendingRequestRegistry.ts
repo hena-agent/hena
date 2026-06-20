@@ -1,9 +1,8 @@
 import { Effect, PubSub, Stream } from "effect";
 
-import { failPendingRequest } from "./fail";
 import { askPendingRequest, closeStore, listRequests } from "./lifecycle";
+import { failPendingRequest, succeedPendingRequest } from "./settle";
 import { makePendingRequestStore } from "./store";
-import { succeedPendingRequest } from "./succeed";
 import type {
   PendingRequestFailure,
   PendingRequestRegistry,

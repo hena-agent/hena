@@ -28,8 +28,12 @@ const makeBashTool = Effect.fnUntraced(function* () {
   const shell = yield* ShellExecutor;
   const workspace = yield* ToolWorkspace;
   return {
-    execute: Effect.fnUntraced(function* (params: BashToolParameters) {
-      const result = yield* shell.execute(params.command, workspace.cwd);
+    execute: Effect.fnUntraced(function* (params: BashToolParameters, context) {
+      const result = yield* shell.execute(
+        params.command,
+        workspace.cwd,
+        context?.signal,
+      );
       return {
         content: [{ type: "text", text: result.output }],
         details: {

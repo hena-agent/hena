@@ -16,7 +16,12 @@ export const isInsideRoot = (
   const relative = pathService.relative(root, target);
   return (
     relative === "" ||
-    (!relative.startsWith("..") && !pathService.isAbsolute(relative))
+    !(
+      relative === ".." ||
+      relative.startsWith("../") ||
+      relative.startsWith("..\\") ||
+      pathService.isAbsolute(relative)
+    )
   );
 };
 

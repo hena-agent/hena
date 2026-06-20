@@ -337,3 +337,110 @@ it.effect(
       ),
     ),
 );
+
+it.effect("resolves dangling symlink write target chains", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const permissions = yield* PermissionService;
+    const fiber = yield* guard
+      .authorizeCreateFile("/workspace/link-a.txt")
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [request] = yield* permissions.list();
+    if (request === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+
+    assert.deepStrictEqual(request.metadata, {
+      filepath: "/outside/new.txt",
+      parentDir: "/outside",
+    });
+
+    yield* permissions.deny({ requestID: request.id, message: "No" });
+    yield* Fiber.join(fiber).pipe(Effect.exit);
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize,
+        pathExists: () => Effect.succeed(false),
+        readLink: (path) => {
+          if (path === "/workspace/link-a.txt") {
+            return Effect.succeed("link-b.txt");
+          }
+          return path === "/workspace/link-b.txt"
+            ? Effect.succeed("/outside/new.txt")
+            : notSymlink(path);
+        },
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
+);
+
+it.effect("canonicalizes existing symlink chain write targets", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const authorization = yield* guard.authorizeCreateFile(
+      "/workspace/link-a.txt",
+    );
+
+    assert.deepStrictEqual(authorization, {
+      canonicalPath: "/workspace/real-target.txt",
+      allowedBy: "workspace",
+    });
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize: (path) =>
+          Effect.succeed(
+            path === "/workspace/target.txt"
+              ? "/workspace/real-target.txt"
+              : path,
+          ),
+        pathExists: (path) => Effect.succeed(path === "/workspace/target.txt"),
+        readLink: (path) =>
+          path === "/workspace/link-a.txt"
+            ? Effect.succeed("target.txt")
+            : notSymlink(path),
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
+);
+
+it.effect("fails cyclic dangling symlink write targets", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const error = yield* guard
+      .authorizeCreateFile("/workspace/loop.txt")
+      .pipe(Effect.flip);
+
+    assert.strictEqual(error._tag, "PlatformError");
+    assert.ok(error.message.includes("InvalidData"));
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize,
+        pathExists: () => Effect.succeed(false),
+        readLink: (path) =>
+          path === "/workspace/loop.txt"
+            ? Effect.succeed("loop.txt")
+            : notSymlink(path),
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
+);

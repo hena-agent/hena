@@ -3,12 +3,12 @@ import { Effect } from "effect";
 
 import type { HenaModel, HenaThinkingLevel } from "./types";
 
-export interface HarnessModelRuntime<Error = unknown> {
+export interface HarnessModelRuntime<E = never> {
   readonly getThinkingLevel: () => Effect.Effect<HenaThinkingLevel>;
   readonly applyModelThenThinkingLevel: (
     model: HenaModel,
     level: HenaThinkingLevel,
-  ) => Effect.Effect<void, Error>;
+  ) => Effect.Effect<void, E>;
 }
 
 export interface SwitchHarnessModelResult {
@@ -21,11 +21,11 @@ export const resolveThinkingLevel = (
   level: HenaThinkingLevel,
 ): HenaThinkingLevel => PiAi.clampThinkingLevel(model, level);
 
-export const switchHarnessModel: <Error>(
-  runtime: HarnessModelRuntime<Error>,
+export const switchHarnessModel: <E = never>(
+  runtime: HarnessModelRuntime<E>,
   model: HenaModel,
   requestedLevel?: HenaThinkingLevel,
-) => Effect.Effect<SwitchHarnessModelResult, Error> = Effect.fnUntraced(
+) => Effect.Effect<SwitchHarnessModelResult, E> = Effect.fnUntraced(
   function* (runtime, model, requestedLevel) {
     const currentLevel =
       requestedLevel === undefined

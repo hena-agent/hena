@@ -23,7 +23,20 @@ const validateAnswer = (
     return Effect.void;
   }
 
-  const labels = new Set(question.options.map((option) => option.label));
+  const optionLabels = question.options.map((option) => option.label);
+  const duplicate = optionLabels.find(
+    (label, index) => optionLabels.indexOf(label) !== index,
+  );
+  if (duplicate !== undefined) {
+    return Effect.fail(
+      invalidReply(
+        requestID,
+        `Question option label ${JSON.stringify(duplicate)} is not unique`,
+      ),
+    );
+  }
+
+  const labels = new Set(optionLabels);
   const invalid = answer.find((value) => !labels.has(value));
   if (invalid !== undefined) {
     return Effect.fail(

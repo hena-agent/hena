@@ -9,6 +9,7 @@ import { ToolShellError } from "./toolErrors";
 import { ToolWorkspace } from "./workspace";
 
 interface ShellCall {
+  readonly abortSignal?: AbortSignal;
   readonly command: string;
   readonly cwd?: string;
 }
@@ -28,9 +29,13 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
     options?: PiAgent.ExecutionEnvExecOptions,
   ): Promise<ShellResult> {
     await Promise.resolve();
-    this.calls.push(
-      options?.cwd === undefined ? { command } : { command, cwd: options.cwd },
-    );
+    this.calls.push({
+      command,
+      ...(options?.cwd === undefined ? {} : { cwd: options.cwd }),
+      ...(options?.abortSignal === undefined
+        ? {}
+        : { abortSignal: options.abortSignal }),
+    });
     if (this.result instanceof Error) {
       throw this.result;
     }
@@ -128,6 +133,29 @@ it.effect("maps rejected shell executions", () =>
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   ),
 );
+
+it.effect("passes abort signals to the execution environment", () => {
+  const calls: Array<ShellCall> = [];
+  const controller = new AbortController();
+
+  return Effect.gen(function* () {
+    const tool = yield* BashTool;
+    yield* tool.execute(
+      { command: "sleep 10" },
+      {
+        toolCallId: "call-1",
+        signal: controller.signal,
+        update: () => Effect.void,
+      },
+    );
+
+    assert.strictEqual(calls[0]?.abortSignal, controller.signal);
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(makeEnvironment("", 0, calls)),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  );
+});
 
 it("adapts BashTool to a pi AgentTool", async () => {
   const tool = makeBashAgentTool(

@@ -321,6 +321,37 @@ it.effect("does not reject interrupted waiters after settlement claims", () =>
   ),
 );
 
+it.effect("does not restore failed settlements after waiter interruption", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makeRegistry();
+      const settlementClaimed = yield* Deferred.make<void>();
+      const releaseSettlement = yield* Deferred.make<void>();
+      const waiter = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const settlement = yield* registry
+        .succeed("req-0", "missing", () =>
+          Deferred.succeed(settlementClaimed, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseSettlement)),
+            Effect.andThen(Effect.fail("builder-failed")),
+          ),
+        )
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Deferred.await(settlementClaimed);
+      yield* Fiber.interrupt(waiter);
+      yield* Deferred.succeed(releaseSettlement, undefined);
+      const settlementError = yield* Fiber.join(settlement).pipe(Effect.flip);
+
+      assert.strictEqual(settlementError, "builder-failed");
+      assert.deepStrictEqual(yield* registry.list(), []);
+    }),
+  ),
+);
+
 it.effect("snapshots listed requests and asked events when configured", () =>
   Effect.scoped(
     Effect.gen(function* () {

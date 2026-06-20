@@ -14,6 +14,7 @@ export interface PendingRequestStore<
   Failure,
   Event,
 > {
+  readonly cancelled: Set<string>;
   closed: boolean;
   nextID: number;
   readonly events: PubSub.PubSub<Event>;
@@ -36,6 +37,7 @@ export const makePendingRequestStore = <
   options: PendingRequestRegistryOptions<Input, Request, Failure, Event>,
   events: PubSub.PubSub<Event>,
 ): PendingRequestStore<Input, Request, Value, Failure, Event> => ({
+  cancelled: new Set(),
   closed: false,
   events,
   nextID: 0,

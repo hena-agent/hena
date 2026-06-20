@@ -6,13 +6,17 @@ import {
   FileSystem,
   Layer,
   Option,
+  Stream,
 } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
 import { makeReadAgentTool, ReadTool } from "./ReadTool";
 import { ToolWorkspace } from "./workspace";
 
-const info = (type: FileSystem.File.Type): FileSystem.File.Info => ({
+const info = (
+  type: FileSystem.File.Type,
+  size = FileSystem.Size(0),
+): FileSystem.File.Info => ({
   type,
   mtime: Option.none(),
   atime: Option.none(),
@@ -24,10 +28,23 @@ const info = (type: FileSystem.File.Type): FileSystem.File.Info => ({
   uid: Option.none(),
   gid: Option.none(),
   rdev: Option.none(),
-  size: FileSystem.Size(0),
+  size,
   blksize: Option.none(),
   blocks: Option.none(),
 });
+
+const fileSystemWithFile = (text: string) =>
+  FileSystem.layerNoop({
+    stat: () => Effect.succeed(info("File", FileSystem.Size(text.length))),
+    stream: (_path, options) => {
+      const encoded = new TextEncoder().encode(text);
+      const limit =
+        options?.bytesToRead === undefined
+          ? encoded.byteLength
+          : Number(options.bytesToRead);
+      return Stream.make(encoded.slice(0, limit));
+    },
+  });
 
 const pathGuard = Layer.succeed(PathGuard)({
   authorize: (path) =>
@@ -72,12 +89,7 @@ it.effect("reads a line-limited file through PathGuard", () =>
     Effect.provide(pathGuard),
     Effect.provide(workspace),
     Effect.provide(EffectPath.layer),
-    Effect.provide(
-      FileSystem.layerNoop({
-        stat: () => Effect.succeed(info("File")),
-        readFileString: () => Effect.succeed("one\ntwo\nthree\nfour"),
-      }),
-    ),
+    Effect.provide(fileSystemWithFile("one\ntwo\nthree\nfour")),
   ),
 );
 
@@ -177,12 +189,7 @@ it.effect("resolves relative file paths from the tool workspace", () => {
       }),
     ),
     Effect.provide(EffectPath.layer),
-    Effect.provide(
-      FileSystem.layerNoop({
-        readFileString: () => Effect.succeed("hello"),
-        stat: () => Effect.succeed(info("File")),
-      }),
-    ),
+    Effect.provide(fileSystemWithFile("hello")),
   );
 });
 

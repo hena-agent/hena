@@ -57,7 +57,7 @@ const localEnvironment = (
   return {
     cwd: request.cwd,
     env,
-    roots: withPrimaryRoot(request.cwd, request.roots),
+    roots: [...request.roots],
     // oxlint-disable-next-line typescript/promise-function-async
     cleanup: Effect.promise(() => env.cleanup()).pipe(Effect.ignore),
   };

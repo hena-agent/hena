@@ -6,7 +6,6 @@ import type {
   ActiveSessionPathEntries,
   AutoCompactionConfig,
   AutoCompactionInput,
-  AutoCompactionResult,
   ContextUsage,
   ContextUsageInput,
 } from "./types";
@@ -61,7 +60,11 @@ const activePathIsAlreadyCompacted = (
 
 export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
   const entries = [...input.activePathEntries];
-  const usage = PiAgent.getLastAssistantUsage(entries);
+  const latest = entries.at(-1);
+  const usage =
+    latest?.type === "message" && latest.message.role === "assistant"
+      ? PiAgent.getLastAssistantUsage(entries)
+      : undefined;
   const source = usage === undefined ? "estimate" : "usage";
   const tokens =
     usage === undefined
@@ -84,15 +87,13 @@ export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
   };
 };
 
-export const autoCompactAfterTurn: <E>(
+export const autoCompactAfterTurn = Effect.fnUntraced(function* <E>(
   input: AutoCompactionInput<E>,
-) => Effect.Effect<AutoCompactionResult, E> = Effect.fnUntraced(
-  function* (input) {
-    const usage = getContextUsage(input);
-    if (!usage.overflow) {
-      return { compacted: false, usage };
-    }
-    const result = yield* input.runtime.compact(input.instructions);
-    return { compacted: true, result, usage };
-  },
-);
+) {
+  const usage = getContextUsage(input);
+  if (!usage.overflow) {
+    return { compacted: false, usage };
+  }
+  const result = yield* input.runtime.compact(input.instructions);
+  return { compacted: true, result, usage };
+});

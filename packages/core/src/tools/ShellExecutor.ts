@@ -13,6 +13,7 @@ export interface ShellExecutorShape {
   readonly execute: (
     command: string,
     cwd: string,
+    signal?: AbortSignal,
   ) => Effect.Effect<ShellExecutionResult, ToolShellError>;
 }
 
@@ -25,10 +26,18 @@ const rejectedShellError = (): ToolShellError =>
 const makeShellExecutor = Effect.fnUntraced(function* () {
   const environment = yield* ExecutionEnvironmentService;
   return {
-    execute: Effect.fnUntraced(function* (commandText: string, cwd: string) {
+    execute: Effect.fnUntraced(function* (
+      commandText: string,
+      cwd: string,
+      signal?: AbortSignal,
+    ) {
       const result = yield* Effect.tryPromise({
         // oxlint-disable-next-line typescript/promise-function-async
-        try: () => environment.env.exec(commandText, { cwd }),
+        try: () =>
+          environment.env.exec(
+            commandText,
+            signal === undefined ? { cwd } : { cwd, abortSignal: signal },
+          ),
         catch: rejectedShellError,
       });
       if (!result.ok) {

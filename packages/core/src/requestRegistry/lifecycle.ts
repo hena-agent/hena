@@ -6,6 +6,7 @@ import {
   rejectEntries,
   snapshotRequest,
 } from "./store";
+import { takePending } from "./takePending";
 
 export const listRequests = <
   Input,
@@ -32,13 +33,13 @@ const rejectInterrupted = <
   store: PendingRequestStore<Input, Request, Value, Failure, Event>,
   requestID: string,
 ): Effect.Effect<void> =>
-  Effect.sync(() => {
-    const entry = store.pending.get(requestID);
-    store.pending.delete(requestID);
-    return entry;
-  }).pipe(
+  takePending(store, requestID).pipe(
     Effect.flatMap((entry) =>
-      entry === undefined ? Effect.void : rejectEntries(store, [entry]),
+      entry === undefined
+        ? Effect.sync(() => {
+            store.cancelled.add(requestID);
+          })
+        : rejectEntries(store, [entry]),
     ),
     Effect.uninterruptible,
   );
@@ -96,5 +97,4 @@ export const closeStore = <
   }).pipe(
     Effect.flatMap((entries) => rejectEntries(store, entries)),
     Effect.andThen(PubSub.shutdown(store.events)),
-    Effect.asVoid,
   );

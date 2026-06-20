@@ -8,7 +8,7 @@ import {
   makeIncludeMatcher,
 } from "./grepOperations";
 
-const fileInfo = (): FileSystem.File.Info => ({
+const fileInfo = (size = FileSystem.Size(0)): FileSystem.File.Info => ({
   type: "File",
   mtime: Option.none(),
   atime: Option.none(),
@@ -20,7 +20,7 @@ const fileInfo = (): FileSystem.File.Info => ({
   uid: Option.none(),
   gid: Option.none(),
   rdev: Option.none(),
-  size: FileSystem.Size(0),
+  size,
   blksize: Option.none(),
   blocks: Option.none(),
 });
@@ -117,6 +117,36 @@ it.effect("reports truncated grep results", () =>
       FileSystem.layerNoop({
         readFileString: () => Effect.succeed("needle\nneedle"),
         stat: () => Effect.succeed(fileInfo()),
+      }),
+    ),
+  ),
+);
+
+it.effect("continues after skipping oversized grep candidates", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* grepFiles(
+      fs,
+      /needle/,
+      ["/workspace/large.log", "/workspace/a.ts"],
+      10,
+    );
+
+    assert.deepStrictEqual(result, {
+      matches: [{ path: "/workspace/a.ts", line: 1, text: "needle" }],
+      truncated: true,
+    });
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readFileString: (path) =>
+          Effect.succeed(path.endsWith("a.ts") ? "needle" : ""),
+        stat: (path) =>
+          Effect.succeed(
+            path.endsWith("large.log")
+              ? fileInfo(FileSystem.MiB(2))
+              : fileInfo(),
+          ),
       }),
     ),
   ),

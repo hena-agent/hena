@@ -51,6 +51,18 @@ it.effect("resolves configured env-key indirection", () =>
   }),
 );
 
+it.effect("does not fall back when configured env-key is missing", () =>
+  Effect.gen(function* () {
+    const resolver = makeCredentialResolver({
+      env: { OPENAI_API_KEY: "default-key" },
+      providers: { openai: { envKey: "HENA_OPENAI_KEY" } },
+    });
+    const result = yield* resolver.getApiKeyAndHeaders(openaiModel);
+
+    assert.strictEqual(result, undefined);
+  }),
+);
+
 it.effect("returns undefined when no credentials are configured", () =>
   Effect.gen(function* () {
     const resolver = makeCredentialResolver();

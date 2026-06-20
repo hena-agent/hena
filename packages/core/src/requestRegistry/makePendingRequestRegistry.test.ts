@@ -225,6 +225,46 @@ it.effect("does not restore failed settlements after close", () =>
   }),
 );
 
+it.effect("rejects settling waiters when the registry closes", () =>
+  Effect.gen(function* () {
+    const setup = yield* Effect.scoped(
+      Effect.gen(function* () {
+        const registry = yield* makeRegistry();
+        const settlementStarted = yield* Deferred.make<void>();
+        const releaseSettlement = yield* Deferred.make<void>();
+        const waiter = yield* registry
+          .ask({ label: "wait" })
+          .pipe(Effect.forkDetach({ startImmediately: true }));
+
+        yield* Effect.yieldNow;
+        const settlement = yield* registry
+          .succeed("req-0", "missing", (request) =>
+            Deferred.succeed(settlementStarted, undefined).pipe(
+              Effect.andThen(Deferred.await(releaseSettlement)),
+              Effect.as({
+                value: "accepted",
+                event: {
+                  type: "resolved",
+                  requestID: request.id,
+                } satisfies Event,
+              }),
+            ),
+          )
+          .pipe(Effect.forkDetach({ startImmediately: true }));
+
+        yield* Deferred.await(settlementStarted);
+        return { releaseSettlement, settlement, waiter };
+      }),
+    );
+
+    const waiterError = yield* Fiber.join(setup.waiter).pipe(Effect.flip);
+    yield* Deferred.succeed(setup.releaseSettlement, undefined);
+    yield* Fiber.join(setup.settlement).pipe(Effect.exit);
+
+    assert.strictEqual(waiterError, "closed");
+  }),
+);
+
 it.effect("claims requests before running settlement effects", () =>
   Effect.scoped(
     Effect.gen(function* () {

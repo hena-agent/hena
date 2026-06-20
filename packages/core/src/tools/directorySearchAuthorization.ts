@@ -17,12 +17,6 @@ interface MakeDirectorySearchAuthorizeInput {
   readonly tool?: ToolRef | undefined;
 }
 
-const authorizeOptions = (
-  kind: FileSearchTargetKind,
-  tool: ToolRef | undefined,
-): Parameters<PathGuardShape["authorize"]>[1] =>
-  tool === undefined ? { kind } : { kind, tool };
-
 export const makeDirectorySearchAuthorize = (
   input: MakeDirectorySearchAuthorizeInput,
 ): FileSearchAuthorize => {
@@ -38,17 +32,17 @@ export const makeDirectorySearchAuthorize = (
       isInsideRoot(input.pathService, root, path),
     );
 
-  return Effect.fnUntraced(function* (path, kind) {
+  return Effect.fnUntraced(function* (path) {
     const canonicalPath = yield* input.fs.realPath(path);
     if (isAuthorized(canonicalPath)) {
       return { canonicalPath };
     }
 
-    const authorization = yield* input.pathGuard.authorize(
+    const authorization = yield* input.pathGuard.authorizeExistingPath(
       canonicalPath,
-      authorizeOptions(kind, input.tool),
+      input.tool === undefined ? {} : { tool: input.tool },
     );
-    if (kind === "directory") {
+    if (authorization.kind === "directory") {
       authorizedDirectories.add(authorization.canonicalPath);
     } else {
       authorizedFiles.add(authorization.canonicalPath);

@@ -123,7 +123,7 @@ it.effect("deduplicates instruction paths from overlapping roots", () =>
   Effect.gen(function* () {
     const instructions = yield* collectProjectInstructions({
       cwd: "/repo/packages/app",
-      roots: ["/repo", "/repo/packages/app"],
+      roots: ["/repo/packages/app", "/repo"],
     });
 
     assert.deepStrictEqual(instructions, [

@@ -61,22 +61,18 @@ export const searchFiles: (
         const fullPath = pathService.join(directory, entry);
         const relativePath =
           prefix === "" ? entry : pathService.join(prefix, entry);
-        const info = yield* fs.stat(fullPath);
+        const statPath = yield* authorizedPath(options, fullPath, "directory");
+        const info = yield* fs.stat(statPath);
 
         if (info.type === "File") {
-          if (!collector.matches(fullPath, relativePath)) {
+          if (!collector.matches(statPath, relativePath)) {
             return;
           }
-          const canonicalPath = yield* authorizedPath(
-            options,
-            fullPath,
-            "file",
-          );
-          collector.add(canonicalPath);
+          collector.add(statPath);
           return;
         }
         if (info.type === "Directory") {
-          yield* visitDirectory(fullPath, relativePath);
+          yield* visitDirectory(statPath, relativePath);
         }
       },
     );

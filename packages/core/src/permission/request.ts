@@ -1,6 +1,31 @@
 import type { PermissionRequest } from "./schema";
 import type { PermissionAskInput } from "./types";
 
+const snapshotMetadataValue = (value: unknown): unknown => {
+  if (Array.isArray(value)) {
+    return value.map(snapshotMetadataValue);
+  }
+  if (value === null || typeof value !== "object") {
+    return value;
+  }
+  return Object.fromEntries(
+    Object.entries(value).map(([key, child]) => [
+      key,
+      snapshotMetadataValue(child),
+    ]),
+  );
+};
+
+const snapshotMetadata = (
+  metadata: PermissionAskInput["metadata"],
+): PermissionAskInput["metadata"] =>
+  Object.fromEntries(
+    Object.entries(metadata).map(([key, value]) => [
+      key,
+      snapshotMetadataValue(value),
+    ]),
+  );
+
 export const permissionKey = (
   sessionID: string,
   permission: string,
@@ -17,7 +42,7 @@ export const makeRequest = (
     permission: input.permission,
     patterns: [...input.patterns],
     always: [...input.always],
-    metadata: { ...input.metadata },
+    metadata: snapshotMetadata(input.metadata),
   } satisfies PermissionRequest;
 
   return input.tool === undefined ? request : { ...request, tool: input.tool };
@@ -32,7 +57,7 @@ export const snapshotPermissionRequest = (
     permission: request.permission,
     patterns: [...request.patterns],
     always: [...request.always],
-    metadata: { ...request.metadata },
+    metadata: snapshotMetadata(request.metadata),
   } satisfies PermissionRequest;
 
   return request.tool === undefined

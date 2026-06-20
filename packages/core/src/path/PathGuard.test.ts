@@ -444,3 +444,36 @@ it.effect("fails cyclic dangling symlink write targets", () =>
     ),
   ),
 );
+
+it.effect("fails closed when write target symlink probing is denied", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const error = yield* guard
+      .authorizeCreateFile("/workspace/denied.txt")
+      .pipe(Effect.flip);
+
+    assert.strictEqual(error._tag, "PlatformError");
+    assert.ok(error.message.includes("PermissionDenied"));
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize,
+        pathExists: () => Effect.succeed(false),
+        readLink: (path) =>
+          Effect.fail(
+            systemError({
+              _tag: "PermissionDenied",
+              module: "FileSystem",
+              method: "readLink",
+              pathOrDescriptor: path,
+            }),
+          ),
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
+);

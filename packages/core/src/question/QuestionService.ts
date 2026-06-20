@@ -48,15 +48,16 @@ const makeQuestionService = Effect.fnUntraced(function* () {
     new QuestionRequestNotFound({ requestID });
 
   const reply = Effect.fnUntraced(function* (input: Reply) {
-    const replySnapshot = snapshotReply(input);
+    const answerSnapshot = snapshotReply(input);
+    const eventSnapshot = snapshotReply(input);
     yield* registry.succeed(
-      replySnapshot.requestID,
-      notFound(replySnapshot.requestID),
+      answerSnapshot.requestID,
+      notFound(answerSnapshot.requestID),
       (request) =>
-        validateReply(request, replySnapshot).pipe(
+        validateReply(request, answerSnapshot).pipe(
           Effect.as({
-            value: replySnapshot.answers,
-            event: { type: "question.replied", reply: replySnapshot },
+            value: answerSnapshot.answers,
+            event: { type: "question.replied", reply: eventSnapshot },
           }),
         ),
     );

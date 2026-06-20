@@ -19,10 +19,6 @@ const directoriesFromRoot = (
   root: string,
   target: string,
 ): ReadonlyArray<string> => {
-  if (!isInsideRoot(pathService, root, target)) {
-    return [];
-  }
-
   const directories: Array<string> = [];
   let current = target;
 
@@ -44,16 +40,15 @@ export const candidatePaths = (
     input.cwd,
     input.targetDirectory ?? input.cwd,
   );
-  const roots = input.roots.length === 0 ? [input.cwd] : input.roots;
+  const roots = (input.roots.length === 0 ? [input.cwd] : input.roots)
+    .map((root) => resolveDirectory(pathService, input.cwd, root))
+    .filter((root) => isInsideRoot(pathService, root, target))
+    .sort((left, right) => left.length - right.length);
   const seen = new Set<string>();
 
   return roots
     .flatMap((root) =>
-      directoriesFromRoot(
-        pathService,
-        resolveDirectory(pathService, input.cwd, root),
-        target,
-      ).flatMap((directory) =>
+      directoriesFromRoot(pathService, root, target).flatMap((directory) =>
         instructionFilenames.map((filename) =>
           pathService.normalize(pathService.join(directory, filename)),
         ),

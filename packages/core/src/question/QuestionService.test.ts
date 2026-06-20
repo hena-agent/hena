@@ -284,12 +284,18 @@ it.effect("snapshots question replies", () =>
     selected.push("Mutated");
     answers.push(["No"]);
 
-    assert.deepStrictEqual(yield* Fiber.join(fiber), [["Yes"]]);
     const events = yield* Fiber.join(eventsFiber);
     const replied = events[1];
     if (replied?.type !== "question.replied") {
       throw new Error("expected replied event");
     }
-    assert.deepStrictEqual(replied.reply.answers, [["Yes"]]);
+    const [eventAnswer] = replied.reply.answers;
+    if (eventAnswer === undefined) {
+      throw new Error("expected event answer");
+    }
+    Reflect.apply(Array.prototype.push, eventAnswer, ["Event mutation"]);
+
+    assert.deepStrictEqual(yield* Fiber.join(fiber), [["Yes"]]);
+    assert.deepStrictEqual(replied.reply.answers, [["Yes", "Event mutation"]]);
   }).pipe(Effect.provide(QuestionService.Live)),
 );

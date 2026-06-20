@@ -23,15 +23,10 @@ const info = (
   blocks: Option.none(),
 });
 
-const fileLayer = (
-  text: string,
-  size = FileSystem.Size(text.length),
-  reads?: Array<FileSystem.SizeInput | undefined>,
-) =>
+const fileLayer = (text: string, size = FileSystem.Size(text.length)) =>
   FileSystem.layerNoop({
     stat: () => Effect.succeed(info("File", size)),
     stream: (_path, options) => {
-      reads?.push(options?.bytesToRead);
       const encoded = new TextEncoder().encode(text);
       const limit =
         options?.bytesToRead === undefined
@@ -70,27 +65,64 @@ it.effect("uses default file line range", () =>
   }).pipe(Effect.provide(fileLayer("a\nb"))),
 );
 
-it.effect("bounds file reads and marks truncated output", () => {
-  const reads: Array<FileSystem.SizeInput | undefined> = [];
-  return Effect.gen(function* () {
+it.effect("streams to requested offsets beyond the first MiB", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const prefixLines = 300_000;
+    const result = yield* readFile(fs, "/large.txt", {
+      filePath: "/large.txt",
+      offset: prefixLines + 1,
+      limit: 1,
+    });
+
+    assert.deepStrictEqual(result.content, [
+      { type: "text", text: "300001: target" },
+    ]);
+    assert.strictEqual(result.details.truncated, false);
+  }).pipe(Effect.provide(fileLayer(`${"skip\n".repeat(300_000)}target`))),
+);
+
+it.effect("marks oversized selected output as truncated", () =>
+  Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const result = yield* readFile(fs, "/large.txt", {
       filePath: "/large.txt",
     });
 
-    assert.deepStrictEqual(reads, [FileSystem.MiB(1)]);
     assert.strictEqual(result.details.truncated, true);
-  }).pipe(Effect.provide(fileLayer("a\nb", FileSystem.MiB(2), reads)));
-});
+  }).pipe(Effect.provide(fileLayer("x".repeat(Number(FileSystem.MiB(1)) + 1)))),
+);
 
-it.effect("marks directories with a slash", () =>
+it.effect(
+  "stops appending lines after selected output reaches the byte cap",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const result = yield* readFile(fs, "/large.txt", {
+        filePath: "/large.txt",
+      });
+      const [content] = result.content;
+      if (content?.type !== "text") {
+        throw new Error("expected text content");
+      }
+
+      assert.strictEqual(content.text.includes("2: next"), false);
+      assert.strictEqual(result.details.truncated, true);
+    }).pipe(
+      Effect.provide(
+        fileLayer(`${"x".repeat(Number(FileSystem.MiB(1)) + 1)}\nnext`),
+      ),
+    ),
+);
+
+it.effect("lists directory entries without probing children", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const pathService = yield* EffectPath.Path;
     const result = yield* readDirectory(fs, pathService, "/workspace");
 
     assert.deepStrictEqual(result.content, [
-      { type: "text", text: "file.txt\nsrc/" },
+      { type: "text", text: "file.txt\nsrc" },
     ]);
   }).pipe(
     Effect.provide(

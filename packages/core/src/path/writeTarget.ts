@@ -11,6 +11,9 @@ interface ResolveWriteTargetInput {
   readonly readLink: (path: string) => Effect.Effect<string, PlatformError>;
 }
 
+const isLinkAbsence = (error: PlatformError): boolean =>
+  error.reason._tag === "NotFound" || error.reason._tag === "InvalidData";
+
 const resolveCreateTarget = Effect.fnUntraced(function* (
   input: ResolveWriteTargetInput,
 ) {
@@ -24,7 +27,10 @@ const resolveSymlinkTarget = Effect.fnUntraced(function* (
   input: ResolveWriteTargetInput,
   path: string,
 ) {
-  const target = yield* Effect.option(input.readLink(path));
+  const target = yield* input.readLink(path).pipe(
+    Effect.map(Option.some),
+    Effect.catchIf(isLinkAbsence, () => Effect.succeed(Option.none<string>())),
+  );
   if (Option.isNone(target)) {
     return Option.none<string>();
   }

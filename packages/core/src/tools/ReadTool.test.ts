@@ -99,7 +99,7 @@ it.effect("reads and sorts a directory", () =>
     const result = yield* tool.execute({ filePath: "/workspace" });
 
     assert.deepStrictEqual(result.content, [
-      { type: "text", text: "a.txt\nsrc/" },
+      { type: "text", text: "a.txt\nsrc" },
     ]);
     assert.deepStrictEqual(result.details, {
       path: "/workspace",

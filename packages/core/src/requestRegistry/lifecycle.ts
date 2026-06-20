@@ -1,5 +1,6 @@
 import { Deferred, Effect, PubSub } from "effect";
 
+import { closeEntries } from "./closeEntries";
 import {
   type PendingRequestStore,
   publish,
@@ -86,15 +87,7 @@ export const closeStore = <
 >(
   store: PendingRequestStore<Input, Request, Value, Failure, Event>,
 ): Effect.Effect<void> =>
-  Effect.sync(() => {
-    if (store.closed) {
-      return [];
-    }
-    store.closed = true;
-    const entries = Array.from(store.pending.values());
-    store.pending.clear();
-    return entries;
-  }).pipe(
+  closeEntries(store).pipe(
     Effect.flatMap((entries) => rejectEntries(store, entries)),
     Effect.andThen(PubSub.shutdown(store.events)),
   );

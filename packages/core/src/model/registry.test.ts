@@ -7,6 +7,7 @@ import {
   ModelNotFoundError,
   makeModelRegistry,
 } from "./registry";
+import type { ModelRegistryConfig } from "./types";
 
 const localModel = {
   provider: "local",
@@ -94,6 +95,27 @@ it.effect("snapshots model lists", () =>
     const model = yield* registry.getDefaultModel();
 
     assert.strictEqual(model.id, "gpt-4o-mini");
+  }),
+);
+
+it.effect("snapshots default model configuration", () =>
+  Effect.gen(function* () {
+    const config = {
+      providers: { openai: { models: ["gpt-4o-mini", "gpt-4o"] } },
+      default: { provider: "openai", modelId: "gpt-4o-mini" },
+      workspaceDefaults: {
+        ws: { provider: "openai", modelId: "gpt-4o" },
+      },
+    } satisfies ModelRegistryConfig;
+    const registry = yield* makeModelRegistry(config);
+    config.default.modelId = "gpt-4o";
+    config.workspaceDefaults.ws.modelId = "gpt-4o-mini";
+
+    const defaultModel = yield* registry.getDefaultModel();
+    const workspaceModel = yield* registry.getDefaultModel("ws");
+
+    assert.strictEqual(defaultModel.id, "gpt-4o-mini");
+    assert.strictEqual(workspaceModel.id, "gpt-4o");
   }),
 );
 

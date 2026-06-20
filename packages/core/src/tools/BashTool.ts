@@ -20,6 +20,7 @@ export interface BashToolDetails {
   readonly command: string;
   readonly cwd: string;
   readonly exitCode: number;
+  readonly truncated: boolean;
 }
 
 export type BashToolShape = ToolShape<BashToolParameters, BashToolDetails>;
@@ -40,6 +41,7 @@ const makeBashTool = Effect.fnUntraced(function* () {
           command: params.command,
           cwd: workspace.cwd,
           exitCode: result.exitCode,
+          truncated: result.truncated,
         },
       } satisfies PiAgent.AgentToolResult<BashToolDetails>;
     }),

@@ -25,6 +25,7 @@ export interface PendingRequestStore<
     Event
   >;
   readonly pending: PendingRequestMap<Request, Value, Failure>;
+  readonly settling: PendingRequestMap<Request, Value, Failure>;
 }
 
 export const makePendingRequestStore = <
@@ -43,6 +44,7 @@ export const makePendingRequestStore = <
   nextID: 0,
   options,
   pending: new Map(),
+  settling: new Map(),
 });
 
 export const publish = <Event>(

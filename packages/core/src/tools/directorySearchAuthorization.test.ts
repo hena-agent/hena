@@ -42,12 +42,15 @@ it.effect(
             }),
           authorizeCreateFile: (path) =>
             Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
-          authorizeExistingPath: (path) =>
-            Effect.succeed({
+          authorizeExistingPath: (path) => {
+            const kind = path === "/external" ? "directory" : "file";
+            authorized.push(`${kind}:${path}`);
+            return Effect.succeed({
               canonicalPath: path,
-              allowedBy: "workspace",
-              kind: "file",
-            }),
+              allowedBy: "permission",
+              kind,
+            });
+          },
         }),
       ),
     );
@@ -92,12 +95,14 @@ it.effect("passes tool refs when authorizing file escapes", () => {
           }),
         authorizeCreateFile: (path) =>
           Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
-        authorizeExistingPath: (path) =>
-          Effect.succeed({
+        authorizeExistingPath: (path, options) => {
+          authorized.push(`file:${path}:${options?.tool?.callID ?? ""}`);
+          return Effect.succeed({
             canonicalPath: path,
-            allowedBy: "workspace",
+            allowedBy: "permission",
             kind: "file",
-          }),
+          });
+        },
       }),
     ),
   );
@@ -137,12 +142,14 @@ it.effect("keeps authorized file roots scoped to that file", () => {
           }),
         authorizeCreateFile: (path) =>
           Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
-        authorizeExistingPath: (path) =>
-          Effect.succeed({
+        authorizeExistingPath: (path) => {
+          authorized.push(`file:${path}`);
+          return Effect.succeed({
             canonicalPath: path,
-            allowedBy: "workspace",
+            allowedBy: "permission",
             kind: "file",
-          }),
+          });
+        },
       }),
     ),
   );

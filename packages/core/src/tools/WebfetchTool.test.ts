@@ -25,6 +25,7 @@ it.effect("fetches URL content as text", () =>
       url: "https://example.test/doc",
       status: 200,
       bytes: 5,
+      truncated: false,
     });
   }).pipe(
     Effect.provide(WebfetchTool.Live),
@@ -41,12 +42,29 @@ it.effect("reports response metadata without format conversion", () =>
       url: "https://example.test/doc",
       status: 200,
       bytes: 5,
+      truncated: false,
     });
   }).pipe(
     Effect.provide(WebfetchTool.Live),
     Effect.provide(makeClient("hello")),
   ),
 );
+
+it.effect("truncates oversized responses", () => {
+  const body = "x".repeat(1024 * 1024 + 1);
+  return Effect.gen(function* () {
+    const tool = yield* WebfetchTool;
+    const result = yield* tool.execute({ url: "https://example.test/large" });
+    const [content] = result.content;
+    if (content?.type !== "text") {
+      throw new Error("expected text content");
+    }
+
+    assert.strictEqual(content.text.length, 1024 * 1024);
+    assert.strictEqual(result.details.bytes, 1024 * 1024 + 1);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(Effect.provide(WebfetchTool.Live), Effect.provide(makeClient(body)));
+});
 
 it.effect("fails non-success HTTP responses", () =>
   Effect.gen(function* () {
@@ -72,6 +90,7 @@ it("adapts WebfetchTool to a pi AgentTool", async () => {
             url: "https://example.test/doc",
             status: 200,
             bytes: 5,
+            truncated: false,
           },
         }),
     }),

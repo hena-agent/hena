@@ -82,6 +82,7 @@ it.effect("runs shell commands in the workspace cwd", () => {
       command: "pwd",
       cwd: "/workspace",
       exitCode: 0,
+      truncated: false,
     });
 
     assert.deepStrictEqual(calls, [{ command: "pwd", cwd: "/workspace" }]);
@@ -99,12 +100,32 @@ it.effect("returns non-zero shell exits as tool output", () =>
 
     assert.deepStrictEqual(result.content, [{ type: "text", text: "boom" }]);
     assert.strictEqual(result.details.exitCode, 1);
+    assert.strictEqual(result.details.truncated, false);
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeEnvironment("boom", 1, [])),
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   ),
 );
+
+it.effect("truncates oversized shell output", () => {
+  const output = "x".repeat(1024 * 1024 + 1);
+  return Effect.gen(function* () {
+    const tool = yield* BashTool;
+    const result = yield* tool.execute({ command: "yes" });
+    const [content] = result.content;
+    if (content?.type !== "text") {
+      throw new Error("expected text content");
+    }
+
+    assert.strictEqual(content.text.length, 1024 * 1024);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(makeEnvironment(output, 0, [])),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  );
+});
 
 it.effect("maps execution environment shell failures", () =>
   Effect.gen(function* () {
@@ -163,7 +184,12 @@ it("adapts BashTool to a pi AgentTool", async () => {
       execute: () =>
         Effect.succeed({
           content: [{ type: "text", text: "ok" }],
-          details: { command: "true", cwd: "/workspace", exitCode: 0 },
+          details: {
+            command: "true",
+            cwd: "/workspace",
+            exitCode: 0,
+            truncated: false,
+          },
         }),
     }),
   );
@@ -174,5 +200,6 @@ it("adapts BashTool to a pi AgentTool", async () => {
     command: "true",
     cwd: "/workspace",
     exitCode: 0,
+    truncated: false,
   });
 });

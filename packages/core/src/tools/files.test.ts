@@ -209,7 +209,8 @@ it.effect("authorizes directories and matching file candidates", () =>
     assert.deepStrictEqual(result.files, ["/workspace/a.ts"]);
     assert.deepStrictEqual(authorized, [
       "directory:/workspace",
-      "file:/workspace/a.ts",
+      "directory:/workspace/a.ts",
+      "directory:/workspace/README.md",
     ]);
   }).pipe(
     Effect.provide(

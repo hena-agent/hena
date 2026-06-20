@@ -1,7 +1,7 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Context, Effect, Layer, Schema } from "effect";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-
+import { collectBoundedUtf8Stream } from "./boundedStreamText";
 import type { CoreAgentTool } from "./schema";
 import {
   makeServiceExecuteAgentTool,
@@ -19,6 +19,7 @@ export interface WebfetchToolDetails {
   readonly url: string;
   readonly status: number;
   readonly bytes: number;
+  readonly truncated: boolean;
 }
 
 export type WebfetchToolShape = ToolShape<
@@ -26,7 +27,7 @@ export type WebfetchToolShape = ToolShape<
   WebfetchToolDetails
 >;
 
-const encoder = new TextEncoder();
+const maxWebfetchBytes = 1024 * 1024;
 
 const httpError = (error: unknown): ToolHttpError =>
   new ToolHttpError({ message: String(error) });
@@ -41,13 +42,17 @@ const makeWebfetchTool = Effect.fnUntraced(function* () {
           Effect.flatMap(HttpClientResponse.filterStatusOk),
           Effect.mapError(httpError),
         );
-      const text = yield* response.text.pipe(Effect.mapError(httpError));
+      const text = yield* collectBoundedUtf8Stream(
+        response.stream,
+        maxWebfetchBytes,
+      ).pipe(Effect.mapError(httpError));
       return {
-        content: [{ type: "text", text }],
+        content: [{ type: "text", text: text.text }],
         details: {
           url: params.url,
           status: response.status,
-          bytes: encoder.encode(text).length,
+          bytes: text.bytes,
+          truncated: text.truncated,
         },
       } satisfies PiAgent.AgentToolResult<WebfetchToolDetails>;
     }),

@@ -49,7 +49,7 @@ export const makeHarnessService: (
     ): Effect.Effect<A, HarnessServiceError> =>
       nonAbortableStructural(semaphore, run);
     const read = <A>(run: () => A): Effect.Effect<A> =>
-      semaphore.withPermit(runSync(run));
+      semaphore.withPermit(runSync(run)); // Avoid torn mutable-harness reads.
 
     return {
       prompt: (...args: Args<"prompt">) =>

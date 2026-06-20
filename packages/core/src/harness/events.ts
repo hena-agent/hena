@@ -57,7 +57,7 @@ export const makeUnsafeHarnessEventBridge: () => Effect.Effect<
       return;
     }
 
-    // The queued object is the flush token; the drain identity-checks it.
+    // Mutating this queued token coalesces deltas; identity only clears latest.
     pending.event = event;
   };
 

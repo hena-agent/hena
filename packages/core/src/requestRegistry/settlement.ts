@@ -52,12 +52,16 @@ export const settlePendingRequest = <
       Effect.flatMap((entry) =>
         entry === undefined
           ? Effect.fail(input.notFound)
-          : Effect.succeed(entry),
+          : Effect.sync(() => {
+              input.store.settling.set(input.requestID, entry);
+              return entry;
+            }),
       ),
       Effect.flatMap((entry) =>
         restore(input.makeSettlement(entry.request)).pipe(
           Effect.onError(() =>
             Effect.sync(() => {
+              input.store.settling.delete(input.requestID);
               if (input.store.cancelled.delete(input.requestID)) {
                 return undefined;
               }
@@ -80,6 +84,7 @@ export const settlePendingRequest = <
               Effect.andThen(
                 Effect.sync(() => {
                   input.store.cancelled.delete(input.requestID);
+                  input.store.settling.delete(input.requestID);
                 }),
               ),
               Effect.andThen(input.complete(entry, settlement)),

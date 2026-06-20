@@ -69,6 +69,14 @@ export const makeModelRegistry = (
 ): Effect.Effect<ModelTypes.ModelRegistryShape> =>
   Effect.sync(() => {
     const models = listModels(config);
+    const defaultRef =
+      config.default === undefined ? undefined : { ...config.default };
+    const workspaceDefaults = Object.fromEntries(
+      Object.entries(config.workspaceDefaults ?? {}).map(([id, ref]) => [
+        id,
+        { ...ref },
+      ]),
+    );
     return {
       getModels: (provider?: string) =>
         Effect.succeed(
@@ -81,8 +89,8 @@ export const makeModelRegistry = (
       getDefaultModel: (workspaceID?: string) => {
         const ref =
           workspaceID === undefined
-            ? config.default
-            : (config.workspaceDefaults?.[workspaceID] ?? config.default);
+            ? defaultRef
+            : (workspaceDefaults[workspaceID] ?? defaultRef);
         if (ref !== undefined) {
           return requireModel(findModel(models, ref), ref);
         }

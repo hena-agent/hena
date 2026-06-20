@@ -47,24 +47,22 @@ it.effect("returns absolute paths matching a glob", () =>
     Effect.provide(EffectPath.layer),
     Effect.provide(
       Layer.succeed(PathGuard)({
-        authorize: (path, options) => {
-          if (path === "/workspace") {
-            assert.strictEqual(options?.kind, "directory");
-            assert.strictEqual(options?.tool?.callID, "call-glob");
-          }
-          return Effect.succeed({
-            canonicalPath: path,
-            allowedBy: "workspace",
-          });
-        },
-        authorizeCreateFile: (path) =>
-          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
-        authorizeExistingPath: (path) =>
+        authorize: (path) =>
           Effect.succeed({
             canonicalPath: path,
             allowedBy: "workspace",
-            kind: "file",
           }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path, options) => {
+          assert.strictEqual(path, "/workspace");
+          assert.strictEqual(options?.tool?.callID, "call-glob");
+          return Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "directory",
+          });
+        },
       }),
     ),
     Effect.provide(
@@ -106,7 +104,7 @@ it.effect("returns content for no glob matches", () =>
           Effect.succeed({
             canonicalPath: path,
             allowedBy: "workspace",
-            kind: "file",
+            kind: "directory",
           }),
       }),
     ),

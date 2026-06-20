@@ -13,9 +13,12 @@ import {
 
 export interface HarnessEventBridge {
   readonly publish: (event: PiAgent.AgentHarnessEvent) => Effect.Effect<void>;
-  readonly publishUnsafe: (event: PiAgent.AgentHarnessEvent) => void;
   readonly shutdown: Effect.Effect<void>;
   readonly stream: Stream.Stream<HarnessEventEnvelope>;
+}
+
+export interface UnsafeHarnessEventBridge extends HarnessEventBridge {
+  readonly publishUnsafe: (event: PiAgent.AgentHarnessEvent) => void;
 }
 
 type HarnessEventListener = (event: PiAgent.AgentHarnessEvent) => void;
@@ -24,8 +27,8 @@ export interface HarnessEventSource {
   readonly subscribe: (listener: HarnessEventListener) => () => void;
 }
 
-export const makeHarnessEventBridge: () => Effect.Effect<
-  HarnessEventBridge,
+export const makeUnsafeHarnessEventBridge: () => Effect.Effect<
+  UnsafeHarnessEventBridge,
   never,
   Scope.Scope
 > = Effect.fnUntraced(function* () {
@@ -84,5 +87,14 @@ export const makeHarnessEventBridge: () => Effect.Effect<
     publishUnsafe,
     shutdown,
     stream: Stream.fromPubSub(pubsub),
-  } satisfies HarnessEventBridge;
+  } satisfies UnsafeHarnessEventBridge;
+});
+
+export const makeHarnessEventBridge: () => Effect.Effect<
+  HarnessEventBridge,
+  never,
+  Scope.Scope
+> = Effect.fnUntraced(function* () {
+  const { publish, shutdown, stream } = yield* makeUnsafeHarnessEventBridge();
+  return { publish, shutdown, stream } satisfies HarnessEventBridge;
 });

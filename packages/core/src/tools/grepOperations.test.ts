@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, Option } from "effect";
 
 import {
   formatMatches,
@@ -7,6 +7,23 @@ import {
   grepFiles,
   makeIncludeMatcher,
 } from "./grepOperations";
+
+const fileInfo = (): FileSystem.File.Info => ({
+  type: "File",
+  mtime: Option.none(),
+  atime: Option.none(),
+  birthtime: Option.none(),
+  dev: 0,
+  ino: Option.none(),
+  mode: 0,
+  nlink: Option.none(),
+  uid: Option.none(),
+  gid: Option.none(),
+  rdev: Option.none(),
+  size: FileSystem.Size(0),
+  blksize: Option.none(),
+  blocks: Option.none(),
+});
 
 it.effect("matches include globs against relative paths and basenames", () =>
   Effect.gen(function* () {
@@ -42,6 +59,7 @@ it.effect(
       Effect.provide(
         FileSystem.layerNoop({
           readFileString: () => Effect.succeed("needle"),
+          stat: () => Effect.succeed(fileInfo()),
         }),
       ),
     ),
@@ -60,6 +78,7 @@ it.effect("propagates per-file grep truncation", () =>
     Effect.provide(
       FileSystem.layerNoop({
         readFileString: () => Effect.succeed("needle\nneedle"),
+        stat: () => Effect.succeed(fileInfo()),
       }),
     ),
   ),
@@ -78,6 +97,7 @@ it.effect("greps matching lines from a file", () =>
     Effect.provide(
       FileSystem.layerNoop({
         readFileString: () => Effect.succeed("hay\nneedle"),
+        stat: () => Effect.succeed(fileInfo()),
       }),
     ),
   ),
@@ -96,6 +116,7 @@ it.effect("reports truncated grep results", () =>
     Effect.provide(
       FileSystem.layerNoop({
         readFileString: () => Effect.succeed("needle\nneedle"),
+        stat: () => Effect.succeed(fileInfo()),
       }),
     ),
   ),

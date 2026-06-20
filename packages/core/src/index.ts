@@ -9,7 +9,6 @@ export type { ActiveSessionPathEntries, AutoCompactionConfig, AutoCompactionInpu
 export { ExecutionEnvironmentService } from "./execution/ExecutionEnvironmentService";
 export type { ExecutionEnvironment, ExecutionEnvProviderShape, ExecutionEnvRequest } from "./execution/ExecutionEnvProvider";
 export { ExecutionEnvProvider, ExecutionEnvProviderError, makeCloudExecutionEnvProvider, makeLocalExecutionEnvProvider } from "./execution/ExecutionEnvProvider";
-export { attachHarnessEventBridge } from "./harness/attachEvents";
 export { HarnessServiceError } from "./harness/errors";
 export type { HarnessEventEnvelope } from "./harness/eventSchema";
 export { toHarnessEventEnvelope } from "./harness/eventSchema";
@@ -29,10 +28,10 @@ export type { CustomModelConfig, HenaModel, HenaThinkingLevel, ModelRef, ModelRe
 export { PathGuard } from "./path/PathGuard";
 export type { PathGuardAuthorization, PathGuardAuthorizeOptions, PathGuardConfig, PathGuardShape, PathGuardTargetKind } from "./path/PathGuardTypes";
 export { PermissionService } from "./permission/PermissionService";
-export { PermissionDeniedError, PermissionID, PermissionRequestNotFound } from "./permission/schema";
+export { PermissionDeniedError, PermissionDeny, PermissionEvent, PermissionGrant, PermissionID, PermissionMetadata, PermissionRequest, PermissionRequestNotFound } from "./permission/schema";
 export type { PermissionAskInput, PermissionServiceShape } from "./permission/types";
 export { QuestionService } from "./question/QuestionService";
-export { QuestionID, QuestionInvalidReplyError, QuestionRejectedError, QuestionRequestNotFound } from "./question/schema";
+export { Answer, Info, QuestionEvent, QuestionID, QuestionInvalidReplyError, QuestionRejectedError, QuestionRequestNotFound, Reply, Request } from "./question/schema";
 export type { AskInput, QuestionServiceShape } from "./question/types";
 export { makeSessionRuntimeLayer } from "./session/runtimeLayer";
 export type { AgentHarnessFactoryShape, SessionRuntimeConfig, SessionRuntimeHarness, SessionRuntimeLoaderShape, SessionRuntimeShape } from "./session/SessionRuntime";

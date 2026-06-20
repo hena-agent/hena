@@ -17,6 +17,10 @@ const skill = {
   content: "Review carefully.",
   filePath: "/skills/review/SKILL.md",
 } satisfies PiAgent.Skill;
+const promptTemplate = {
+  name: "commit",
+  content: "Write a commit message.",
+} satisfies PiAgent.PromptTemplate;
 
 const makeSession = (): Effect.Effect<PiAgent.Session> =>
   Effect.promise(async () => {
@@ -76,6 +80,7 @@ it.effect("assembles pi AgentHarnessOptions from core services", () =>
       assert.deepStrictEqual(options.tools, [tool]);
       assert.deepStrictEqual(options.activeToolNames, ["echo"]);
       assert.deepStrictEqual(options.resources, { skills: [skill] });
+      assert.notStrictEqual(options.resources?.skills, undefined);
       assert.deepStrictEqual(options.streamOptions, { timeoutMs: 1_000 });
       const getApiKeyAndHeaders = options.getApiKeyAndHeaders;
       assert.strictEqual(typeof getApiKeyAndHeaders, "function");
@@ -111,6 +116,41 @@ it.effect("assembles pi AgentHarnessOptions from core services", () =>
         assert.ok(prompt.includes("Use bun."));
         assert.ok(prompt.includes("Extra prompt."));
       }
+    }),
+  ),
+);
+
+it.effect("snapshots resource arrays", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const cwd = process.cwd();
+      const session = yield* makeSession();
+      const skills = [skill];
+      const promptTemplates = [promptTemplate];
+      const options = makeAgentHarnessOptionsFromEnvironment({
+        environment: makeEnvironment(cwd),
+        session,
+        model,
+        resources: { promptTemplates, skills },
+      });
+
+      skills.push({ ...skill, name: "mutated" });
+      promptTemplates.push({ ...promptTemplate, name: "mutated" });
+
+      assert.deepStrictEqual(options.resources, {
+        promptTemplates: [promptTemplate],
+        skills: [skill],
+      });
+
+      const templateOnly = makeAgentHarnessOptionsFromEnvironment({
+        environment: makeEnvironment(cwd),
+        session,
+        model,
+        resources: { promptTemplates: [promptTemplate] },
+      });
+      assert.deepStrictEqual(templateOnly.resources, {
+        promptTemplates: [promptTemplate],
+      });
     }),
   ),
 );

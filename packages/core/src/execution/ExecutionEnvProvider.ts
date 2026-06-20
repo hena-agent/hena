@@ -1,6 +1,6 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import * as PiNode from "@earendil-works/pi-agent-core/node";
-import { Context, Effect, Layer, Schema } from "effect";
+import { Context, Effect, Layer, Schema, type Scope } from "effect";
 
 export interface ExecutionEnvRequest {
   readonly cwd: string;
@@ -17,10 +17,14 @@ export interface ExecutionEnvironment {
   readonly roots: ReadonlyArray<string>;
 }
 
+type ExecutionEnvAcquire = Effect.Effect<
+  ExecutionEnvironment,
+  ExecutionEnvProviderError,
+  Scope.Scope
+>;
+
 export interface ExecutionEnvProviderShape {
-  readonly create: (
-    request: ExecutionEnvRequest,
-  ) => Effect.Effect<ExecutionEnvironment, ExecutionEnvProviderError>;
+  readonly create: (request: ExecutionEnvRequest) => ExecutionEnvAcquire;
 }
 
 export class ExecutionEnvProviderError extends Schema.TaggedErrorClass<ExecutionEnvProviderError>()(
@@ -60,10 +64,11 @@ const localEnvironment = (
 };
 
 export const makeLocalExecutionEnvProvider = (): ExecutionEnvProviderShape => ({
-  create: (
-    request: ExecutionEnvRequest,
-  ): Effect.Effect<ExecutionEnvironment, ExecutionEnvProviderError> =>
-    Effect.sync(() => localEnvironment(request)),
+  create: (request: ExecutionEnvRequest): ExecutionEnvAcquire =>
+    Effect.acquireRelease(
+      Effect.sync(() => localEnvironment(request)),
+      (environment) => environment.cleanup,
+    ),
 });
 
 export const makeCloudExecutionEnvProvider = (): ExecutionEnvProviderShape => ({

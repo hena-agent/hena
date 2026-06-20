@@ -23,8 +23,6 @@ export const makeExecutionEnvironmentLayer = (
     ExecutionEnvironmentService,
     Effect.gen(function* () {
       const provider = yield* ExecutionEnvProvider;
-      const environment = yield* provider.create(request);
-      yield* Effect.addFinalizer(() => environment.cleanup);
-      return environment;
+      return yield* provider.create(request);
     }),
   );

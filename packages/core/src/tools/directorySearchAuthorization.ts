@@ -13,6 +13,7 @@ interface MakeDirectorySearchAuthorizeInput {
   readonly pathGuard: PathGuardShape;
   readonly pathService: EffectPath.Path;
   readonly root: string;
+  readonly rootKind: FileSearchTargetKind;
   readonly tool?: ToolRef | undefined;
 }
 
@@ -25,8 +26,14 @@ const authorizeOptions = (
 export const makeDirectorySearchAuthorize = (
   input: MakeDirectorySearchAuthorizeInput,
 ): FileSearchAuthorize => {
-  const authorizedDirectories = new Set([input.root]);
+  const authorizedDirectories = new Set(
+    input.rootKind === "directory" ? [input.root] : [],
+  );
+  const authorizedFiles = new Set(
+    input.rootKind === "file" ? [input.root] : [],
+  );
   const isAuthorized = (path: string): boolean =>
+    authorizedFiles.has(path) ||
     Array.from(authorizedDirectories).some((root) =>
       isInsideRoot(input.pathService, root, path),
     );
@@ -43,6 +50,8 @@ export const makeDirectorySearchAuthorize = (
     );
     if (kind === "directory") {
       authorizedDirectories.add(authorization.canonicalPath);
+    } else {
+      authorizedFiles.add(authorization.canonicalPath);
     }
     return { canonicalPath: authorization.canonicalPath };
   });

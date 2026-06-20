@@ -17,6 +17,7 @@ it.effect(
         pathGuard,
         pathService,
         root: "/workspace",
+        rootKind: "directory",
       });
 
       yield* authorize("/workspace/a.ts", "file");
@@ -64,6 +65,7 @@ it.effect("passes tool refs when authorizing file escapes", () => {
       pathGuard,
       pathService,
       root: "/workspace",
+      rootKind: "directory",
       tool: { callID: "call-search" },
     });
 
@@ -86,6 +88,51 @@ it.effect("passes tool refs when authorizing file escapes", () => {
             authorized.push(
               `${options?.kind ?? "file"}:${path}:${options?.tool?.callID ?? ""}`,
             );
+            return { canonicalPath: path, allowedBy: "permission" };
+          }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          }),
+      }),
+    ),
+  );
+});
+
+it.effect("keeps authorized file roots scoped to that file", () => {
+  const authorized: Array<string> = [];
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const pathGuard = yield* PathGuard;
+    const authorize = makeDirectorySearchAuthorize({
+      fs,
+      pathGuard,
+      pathService,
+      root: "/external/secret.ts",
+      rootKind: "file",
+    });
+
+    yield* authorize("/external/secret.ts", "file");
+    yield* authorize("/external/other.ts", "file");
+
+    assert.deepStrictEqual(authorized, ["file:/external/other.ts"]);
+  }).pipe(
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      FileSystem.layerNoop({
+        realPath: (path) => Effect.succeed(path),
+      }),
+    ),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path, options) =>
+          Effect.sync(() => {
+            authorized.push(`${options?.kind ?? "file"}:${path}`);
             return { canonicalPath: path, allowedBy: "permission" };
           }),
         authorizeCreateFile: (path) =>

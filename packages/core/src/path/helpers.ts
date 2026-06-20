@@ -1,6 +1,7 @@
 import type { Path as EffectPath } from "effect";
 
 type TargetKind = "file" | "directory";
+type ContainmentPath = Pick<EffectPath.Path, "isAbsolute" | "relative">;
 
 export interface ExternalDirectoryPattern {
   readonly parentDir: string;
@@ -8,12 +9,15 @@ export interface ExternalDirectoryPattern {
 }
 
 export const isInsideRoot = (
-  pathService: EffectPath.Path,
+  pathService: ContainmentPath,
   root: string,
   target: string,
 ): boolean => {
   const relative = pathService.relative(root, target);
-  return !(relative === ".." || relative.startsWith("../"));
+  return (
+    relative === "" ||
+    (!relative.startsWith("..") && !pathService.isAbsolute(relative))
+  );
 };
 
 export const externalDirectoryPattern = (

@@ -21,6 +21,16 @@ const credentialCallback =
   ): ReturnType<HarnessCredentialCallback> =>
     Effect.runPromise(credentials.getApiKeyAndHeaders(model));
 
+const snapshotResources = (
+  resources: PiAgent.AgentHarnessResources,
+): PiAgent.AgentHarnessResources => ({
+  ...resources,
+  ...(resources.promptTemplates === undefined
+    ? {}
+    : { promptTemplates: [...resources.promptTemplates] }),
+  ...(resources.skills === undefined ? {} : { skills: [...resources.skills] }),
+});
+
 export const makeAgentHarnessOptionsFromEnvironment = (
   input: MakeOptionsFromEnvironmentInput,
 ): PiAgent.AgentHarnessOptions => {
@@ -39,7 +49,9 @@ export const makeAgentHarnessOptionsFromEnvironment = (
     ...(input.credentials === undefined
       ? {}
       : { getApiKeyAndHeaders: credentialCallback(input.credentials) }),
-    ...(input.resources === undefined ? {} : { resources: input.resources }),
+    ...(input.resources === undefined
+      ? {}
+      : { resources: snapshotResources(input.resources) }),
     ...(input.streamOptions === undefined
       ? {}
       : { streamOptions: input.streamOptions }),

@@ -83,6 +83,20 @@ it.effect("constructs with default config", () =>
   }),
 );
 
+it.effect("snapshots model lists", () =>
+  Effect.gen(function* () {
+    const registry = yield* makeModelRegistry({
+      providers: { openai: { models: ["gpt-4o-mini"] } },
+    });
+    const models = yield* registry.getModels();
+    Reflect.set(models, "length", 0);
+
+    const model = yield* registry.getDefaultModel();
+
+    assert.strictEqual(model.id, "gpt-4o-mini");
+  }),
+);
+
 it.effect("resolves models and reports filtered misses", () =>
   Effect.gen(function* () {
     const registry = yield* makeModelRegistry({

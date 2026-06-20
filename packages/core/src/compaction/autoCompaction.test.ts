@@ -76,6 +76,14 @@ it("uses opencode reserve policy by default", () => {
     getCompactionReserve(model, { compaction: { reserved: 512 } }),
     512,
   );
+  assert.strictEqual(
+    getCompactionReserve(model, { compaction: { reserved: -1 } }),
+    4_096,
+  );
+  assert.strictEqual(
+    getCompactionReserve(model, { compaction: { reserved: Number.NaN } }),
+    4_096,
+  );
 });
 
 it("computes context usage from the last assistant usage", () => {

@@ -67,7 +67,7 @@ export const makeModelRegistry = (
       getModels: (provider?: string) =>
         Effect.succeed(
           provider === undefined
-            ? models
+            ? [...models]
             : models.filter((model) => model.provider === provider),
         ),
       getModel: (ref: ModelTypes.ModelRef) =>

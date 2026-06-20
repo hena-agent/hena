@@ -8,9 +8,12 @@ import {
   corePackageNameEffect,
   ExecutionEnvProvider,
   HarnessService,
+  Info,
   makeSessionRuntimeLayer,
+  PermissionGrant,
   PermissionService,
   QuestionService,
+  Reply,
   SessionRuntimeMap,
 } from "./index";
 
@@ -31,6 +34,9 @@ it("exports core session runtime building blocks", () => {
   assert.ok(SessionRuntimeMap.layer);
   assert.ok(ExecutionEnvProvider.Local);
   assert.ok(HarnessService);
+  assert.ok(Info);
+  assert.ok(PermissionGrant);
   assert.ok(QuestionService.Live);
+  assert.ok(Reply);
   assert.ok(PermissionService.Live);
 });

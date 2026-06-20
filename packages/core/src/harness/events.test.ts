@@ -5,7 +5,7 @@ import { assert, it } from "@effect/vitest";
 import { Effect, Fiber, Stream } from "effect";
 
 import { attachHarnessEventBridge } from "./attachEvents";
-import { makeHarnessEventBridge } from "./events";
+import { makeHarnessEventBridge, makeUnsafeHarnessEventBridge } from "./events";
 
 const makeSession = async (id: string): Promise<PiAgent.Session> => {
   const repo = new PiAgent.InMemorySessionRepo();
@@ -46,10 +46,20 @@ const toolUpdate = (
   partialResult: { content: [{ type: "text", text }] },
 });
 
-it.effect("coalesces deltas while preserving reliable event order", () =>
+it.effect("keeps unsafe publishing off the public bridge", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const bridge = yield* makeHarnessEventBridge();
+
+      assert.strictEqual("publishUnsafe" in bridge, false);
+    }),
+  ),
+);
+
+it.effect("coalesces deltas while preserving reliable event order", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const bridge = yield* makeUnsafeHarnessEventBridge();
       const agentStart: PiAgent.AgentHarnessEvent = { type: "agent_start" };
       const firstDelta = messageUpdate("one", 1);
       const secondDelta = messageUpdate("two", 2);
@@ -82,7 +92,7 @@ it.effect("coalesces deltas while preserving reliable event order", () =>
 it.effect("keeps independent delta streams from evicting each other", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const bridge = yield* makeHarnessEventBridge();
+      const bridge = yield* makeUnsafeHarnessEventBridge();
       const firstMessageDelta = messageUpdate("one", 1);
       const secondMessageDelta = messageUpdate("two", 2);
       const firstToolDelta = toolUpdate("call-1", "partial");
@@ -118,7 +128,7 @@ it.effect("keeps independent delta streams from evicting each other", () =>
 it.effect("does not move deltas across reliable event barriers", () =>
   Effect.scoped(
     Effect.gen(function* () {
-      const bridge = yield* makeHarnessEventBridge();
+      const bridge = yield* makeUnsafeHarnessEventBridge();
       const firstDelta = messageUpdate("one", 1);
       const secondDelta = messageUpdate("two", 2);
       const settled: PiAgent.AgentHarnessEvent = {
@@ -166,7 +176,7 @@ it.effect(
           session,
         });
 
-        const bridge = yield* makeHarnessEventBridge();
+        const bridge = yield* makeUnsafeHarnessEventBridge();
         yield* attachHarnessEventBridge(harness, bridge);
         const eventsFiber = yield* bridge.stream.pipe(
           Stream.takeUntil((item) => item.event.type === "settled"),

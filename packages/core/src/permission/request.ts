@@ -44,7 +44,8 @@ export const isAlwaysGranted = (
   alwaysGranted: ReadonlySet<string>,
   input: PermissionAskInput,
 ): boolean =>
-  input.patterns.every((pattern) =>
+  input.always.length > 0 &&
+  input.always.every((pattern) =>
     alwaysGranted.has(
       permissionKey(input.sessionID, input.permission, pattern),
     ),

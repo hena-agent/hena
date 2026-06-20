@@ -9,9 +9,22 @@ it.effect("detects paths inside and outside a root", () =>
 
     assert.strictEqual(isInsideRoot(pathService, "/root", "/root"), true);
     assert.strictEqual(isInsideRoot(pathService, "/root", "/root/file"), true);
+    assert.strictEqual(isInsideRoot(pathService, "/root", "/rooted"), false);
     assert.strictEqual(isInsideRoot(pathService, "/root", "/other"), false);
   }).pipe(Effect.provide(EffectPath.layer)),
 );
+
+it("rejects absolute relative paths from another root", () => {
+  const pathService = {
+    relative: () => "C:\\outside",
+    isAbsolute: (path: string) => path.includes(":"),
+  };
+
+  assert.strictEqual(
+    isInsideRoot(pathService, "C:\\root", "D:\\outside"),
+    false,
+  );
+});
 
 it.effect("builds external directory glob patterns", () =>
   Effect.gen(function* () {

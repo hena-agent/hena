@@ -155,17 +155,20 @@ const makeLayers = (state: TestState) =>
     }),
     Layer.succeed(ExecutionEnvProvider, {
       create: (request) =>
-        Effect.sync(() => {
-          state.request = request;
-          return {
-            cwd: request.cwd,
-            roots: request.roots,
-            env: new PiNode.NodeExecutionEnv({ cwd: request.cwd }),
-            cleanup: Effect.sync(() => {
-              state.cleanups++;
-            }),
-          };
-        }),
+        Effect.acquireRelease(
+          Effect.sync(() => {
+            state.request = request;
+            return {
+              cwd: request.cwd,
+              roots: request.roots,
+              env: new PiNode.NodeExecutionEnv({ cwd: request.cwd }),
+              cleanup: Effect.sync(() => {
+                state.cleanups++;
+              }),
+            };
+          }),
+          (environment) => environment.cleanup,
+        ),
     }),
     FileSystem.layerNoop({
       exists: (path) => Effect.succeed(state.files?.has(path) ?? false),

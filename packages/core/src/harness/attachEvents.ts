@@ -1,11 +1,11 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Effect, type Scope } from "effect";
 
-import type { HarnessEventBridge, HarnessEventSource } from "./events";
+import type { HarnessEventSource, UnsafeHarnessEventBridge } from "./events";
 
 export const attachHarnessEventBridge = (
   harness: HarnessEventSource,
-  bridge: HarnessEventBridge,
+  bridge: UnsafeHarnessEventBridge,
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.sync(() =>
     harness.subscribe((event: PiAgent.AgentHarnessEvent): void => {

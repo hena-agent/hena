@@ -8,7 +8,7 @@ import {
 import type { PlatformError } from "effect/PlatformError";
 import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import { attachHarnessEventBridge } from "../harness/attachEvents";
-import { makeHarnessEventBridge } from "../harness/events";
+import { makeUnsafeHarnessEventBridge } from "../harness/events";
 import { HarnessService } from "../harness/HarnessService";
 import { makeHarnessService } from "../harness/makeHarnessService";
 import { makeAgentHarnessOptionsFromEnvironment } from "../harness/options";
@@ -47,7 +47,7 @@ export const makeRuntimeHarnessLayer = (
     Effect.gen(function* () {
       const environment = yield* ExecutionEnvironmentService;
       const factory = yield* AgentHarnessFactory;
-      const bridge = yield* makeHarnessEventBridge();
+      const bridge = yield* makeUnsafeHarnessEventBridge();
       const projectInstructions = yield* collectProjectInstructions(config);
       const systemPrompt = mergeRuntimeSystemPromptConfig(
         config.systemPrompt,

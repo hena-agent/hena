@@ -1,4 +1,4 @@
-import { Effect, type FileSystem } from "effect";
+import { Effect, FileSystem } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
 import { compileGlobEffect } from "./globMatch";
@@ -16,6 +16,8 @@ export interface GrepResult {
 }
 
 type IncludeMatcher = (relativePath: string, basename: string) => boolean;
+
+const maxGrepFileBytes = FileSystem.MiB(1);
 
 export const makeIncludeMatcher: (
   include?: string,
@@ -37,6 +39,10 @@ export const grepFile: (
   limit: number,
 ) => Effect.Effect<GrepResult, PlatformError> = Effect.fnUntraced(
   function* (fs, pattern, file, limit) {
+    const info = yield* fs.stat(file);
+    if (info.size > maxGrepFileBytes) {
+      return { matches: [], truncated: true };
+    }
     const text = yield* fs.readFileString(file);
     const matches: Array<GrepMatch> = [];
     for (const [index, line] of text.split(/\r?\n/).entries()) {

@@ -3,6 +3,7 @@ import type * as PiAi from "@earendil-works/pi-ai";
 import { Effect } from "effect";
 
 import type {
+  ActiveSessionPathEntries,
   AutoCompactionConfig,
   AutoCompactionInput,
   AutoCompactionResult,
@@ -15,8 +16,13 @@ export const COMPACTION_BUFFER = 20_000;
 export const getCompactionReserve = (
   model: PiAi.Model<PiAi.Api>,
   config: AutoCompactionConfig = {},
-): number =>
-  config.compaction?.reserved ?? Math.min(COMPACTION_BUFFER, model.maxTokens);
+): number => {
+  const reserved = config.compaction?.reserved;
+  if (reserved !== undefined && Number.isFinite(reserved) && reserved >= 0) {
+    return reserved;
+  }
+  return Math.min(COMPACTION_BUFFER, model.maxTokens);
+};
 
 export const shouldAutoCompact = (
   tokens: number,
@@ -45,8 +51,8 @@ const lastIndex = (
   return -1;
 };
 
-const isAlreadyCompacted = (
-  entries: ReadonlyArray<PiAgent.SessionTreeEntry>,
+const activePathIsAlreadyCompacted = (
+  entries: ActiveSessionPathEntries,
 ): boolean => {
   const compactionIndex = lastIndex(entries, "compaction");
   const messageIndex = lastIndex(entries, "message");
@@ -69,7 +75,7 @@ export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
     auto: input.config?.compaction?.auto !== false,
     contextWindow: input.model.contextWindow,
     overflow:
-      !isAlreadyCompacted(input.activePathEntries) &&
+      !activePathIsAlreadyCompacted(input.activePathEntries) &&
       shouldAutoCompact(tokens, input.model, input.config),
     reserve,
     source,

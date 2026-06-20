@@ -10,6 +10,7 @@ import {
 
 import { PathGuard } from "../path/PathGuard";
 import { GrepTool, makeGrepAgentTool } from "./GrepTool";
+import { executeGrepSearch } from "./grepSearch";
 import { ToolInputError } from "./toolErrors";
 import { ToolWorkspace } from "./workspace";
 
@@ -43,7 +44,7 @@ const makeLayer = GrepTool.Live.pipe(
         Effect.succeed({
           canonicalPath: path,
           allowedBy: "workspace",
-          kind: "file",
+          kind: path === "/workspace" ? "directory" : "file",
         }),
     }),
   ),
@@ -61,6 +62,41 @@ const makeLayer = GrepTool.Live.pipe(
         ),
     }),
   ),
+);
+
+it.effect(
+  "marks results truncated when a candidate file exceeds the grep cap",
+  () =>
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const pathService = yield* EffectPath.Path;
+      const result = yield* executeGrepSearch({
+        fs,
+        pathService,
+        root: "/workspace",
+        params: { pattern: "needle", include: "*.ts" },
+      });
+
+      assert.deepStrictEqual(result.content, [
+        { type: "text", text: "No files found" },
+      ]);
+      assert.deepStrictEqual(result.details, { matches: 0, truncated: true });
+    }).pipe(
+      Effect.provide(EffectPath.layer),
+      Effect.provide(
+        FileSystem.layerNoop({
+          readDirectory: () => Effect.succeed(["src/a.ts"]),
+          readFileString: () => Effect.die("large file should not be read"),
+          realPath: (path) => Effect.succeed(path),
+          stat: (path) =>
+            Effect.succeed(
+              path === "/workspace"
+                ? info("Directory")
+                : { ...info("File"), size: FileSystem.MiB(2) },
+            ),
+        }),
+      ),
+    ),
 );
 
 it.effect("greps files and groups line matches", () =>

@@ -133,6 +133,39 @@ it.effect("always grants resolve already pending matching requests", () =>
   }).pipe(Effect.provide(PermissionService.Live)),
 );
 
+it.effect("uses always patterns as the reuse key", () =>
+  Effect.gen(function* () {
+    const service = yield* PermissionService;
+    const firstFiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        patterns: ["/outside/file.txt"],
+        always: ["/outside/*"],
+        metadata: {},
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [first] = yield* service.list();
+    if (first === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+    yield* service.grant({ requestID: first.id, scope: "always" });
+    yield* Fiber.join(firstFiber);
+
+    yield* service.ask({
+      sessionID: "session-1",
+      permission: "external_directory",
+      patterns: ["/outside/other.txt"],
+      always: ["/outside/*"],
+      metadata: {},
+    });
+
+    assert.deepStrictEqual(yield* service.list(), []);
+  }).pipe(Effect.provide(PermissionService.Live)),
+);
+
 it.effect("denies pending permissions and reports missing request ids", () =>
   Effect.gen(function* () {
     const service = yield* PermissionService;

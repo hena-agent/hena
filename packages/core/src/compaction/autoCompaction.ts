@@ -1,0 +1,99 @@
+import * as PiAgent from "@earendil-works/pi-agent-core";
+import type * as PiAi from "@earendil-works/pi-ai";
+import { Effect } from "effect";
+
+import type {
+  ActiveSessionPathEntries,
+  AutoCompactionConfig,
+  AutoCompactionInput,
+  ContextUsage,
+  ContextUsageInput,
+} from "./types";
+
+export const COMPACTION_BUFFER = 20_000;
+
+export const getCompactionReserve = (
+  model: PiAi.Model<PiAi.Api>,
+  config: AutoCompactionConfig = {},
+): number => {
+  const reserved = config.compaction?.reserved;
+  if (reserved !== undefined && Number.isFinite(reserved) && reserved >= 0) {
+    return reserved;
+  }
+  return Math.min(COMPACTION_BUFFER, model.maxTokens);
+};
+
+export const shouldAutoCompact = (
+  tokens: number,
+  model: PiAi.Model<PiAi.Api>,
+  config: AutoCompactionConfig = {},
+): boolean => {
+  if (config.compaction?.auto === false || model.contextWindow === 0) {
+    return false;
+  }
+  return PiAgent.shouldCompact(tokens, model.contextWindow, {
+    enabled: true,
+    keepRecentTokens: COMPACTION_BUFFER,
+    reserveTokens: getCompactionReserve(model, config),
+  });
+};
+
+const lastIndex = (
+  entries: ReadonlyArray<PiAgent.SessionTreeEntry>,
+  type: PiAgent.SessionTreeEntry["type"],
+): number => {
+  for (let index: number = entries.length - 1; index >= 0; index--) {
+    if (entries[index]?.type === type) {
+      return index;
+    }
+  }
+  return -1;
+};
+
+const activePathIsAlreadyCompacted = (
+  entries: ActiveSessionPathEntries,
+): boolean => {
+  const compactionIndex = lastIndex(entries, "compaction");
+  const messageIndex = lastIndex(entries, "message");
+  return compactionIndex >= 0 && messageIndex <= compactionIndex;
+};
+
+export const getContextUsage = (input: ContextUsageInput): ContextUsage => {
+  const entries = [...input.activePathEntries];
+  const latest = entries.at(-1);
+  const usage =
+    latest?.type === "message" && latest.message.role === "assistant"
+      ? PiAgent.getLastAssistantUsage(entries)
+      : undefined;
+  const source = usage === undefined ? "estimate" : "usage";
+  const tokens =
+    usage === undefined
+      ? PiAgent.estimateContextTokens(
+          PiAgent.buildSessionContext(entries).messages,
+        ).tokens
+      : PiAgent.calculateContextTokens(usage);
+  const reserve = getCompactionReserve(input.model, input.config);
+  const usable = Math.max(0, input.model.contextWindow - reserve);
+  return {
+    auto: input.config?.compaction?.auto !== false,
+    contextWindow: input.model.contextWindow,
+    overflow:
+      !activePathIsAlreadyCompacted(input.activePathEntries) &&
+      shouldAutoCompact(tokens, input.model, input.config),
+    reserve,
+    source,
+    tokens,
+    usable,
+  };
+};
+
+export const autoCompactAfterTurn = Effect.fnUntraced(function* <E>(
+  input: AutoCompactionInput<E>,
+) {
+  const usage = getContextUsage(input);
+  if (!usage.overflow) {
+    return { compacted: false, usage };
+  }
+  const result = yield* input.runtime.compact(input.instructions);
+  return { compacted: true, result, usage };
+});

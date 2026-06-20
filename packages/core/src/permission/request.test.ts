@@ -1,10 +1,9 @@
 import { assert, it } from "@effect/vitest";
 
+import { permissionKey, rememberAlwaysGrant } from "./grantKey";
 import {
   isAlwaysGranted,
   makeRequest,
-  permissionKey,
-  rememberAlwaysGrant,
   snapshotPermissionRequest,
 } from "./request";
 import type { PermissionAskInput } from "./types";
@@ -12,6 +11,7 @@ import type { PermissionAskInput } from "./types";
 const input = {
   sessionID: "session-1",
   permission: "external_directory",
+  capability: "read",
   patterns: ["/outside/*"],
   always: ["/outside/*"],
   metadata: {},
@@ -49,14 +49,22 @@ it("snapshots nested permission metadata", () => {
   });
 });
 
-it("tracks exact always grants by session, permission, and pattern", () => {
+it("tracks exact always grants by session, permission, capability, and pattern", () => {
   const grants = new Set<string>();
 
   assert.strictEqual(isAlwaysGranted(grants, input), false);
-  rememberAlwaysGrant(grants, input.sessionID, input.permission, input.always);
+  rememberAlwaysGrant({
+    alwaysGranted: grants,
+    capability: input.capability,
+    patterns: input.always,
+    permission: input.permission,
+    sessionID: input.sessionID,
+  });
 
   assert.strictEqual(
-    grants.has(permissionKey("session-1", "external_directory", "/outside/*")),
+    grants.has(
+      permissionKey("session-1", "external_directory", "read", "/outside/*"),
+    ),
     true,
   );
   assert.strictEqual(isAlwaysGranted(grants, input), true);
@@ -66,6 +74,10 @@ it("tracks exact always grants by session, permission, and pattern", () => {
   );
   assert.strictEqual(
     isAlwaysGranted(grants, { ...input, permission: "other_permission" }),
+    false,
+  );
+  assert.strictEqual(
+    isAlwaysGranted(grants, { ...input, capability: "write" }),
     false,
   );
 });

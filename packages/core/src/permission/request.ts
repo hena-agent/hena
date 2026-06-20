@@ -1,5 +1,6 @@
 import type { Schema } from "effect";
 
+import { permissionKey } from "./grantKey";
 import type { PermissionRequest } from "./schema";
 import type { PermissionAskInput } from "./types";
 
@@ -32,12 +33,6 @@ const snapshotMetadata = (
     ]),
   );
 
-export const permissionKey = (
-  sessionID: string,
-  permission: string,
-  pattern: string,
-): string => `${sessionID}\u0000${permission}\u0000${pattern}`;
-
 export const makeRequest = (
   id: string,
   input: PermissionAskInput,
@@ -46,6 +41,7 @@ export const makeRequest = (
     id,
     sessionID: input.sessionID,
     permission: input.permission,
+    ...(input.capability === undefined ? {} : { capability: input.capability }),
     patterns: [...input.patterns],
     always: [...input.always],
     metadata: snapshotMetadata(input.metadata),
@@ -63,6 +59,9 @@ export const snapshotPermissionRequest = (
     id: request.id,
     sessionID: request.sessionID,
     permission: request.permission,
+    ...(request.capability === undefined
+      ? {}
+      : { capability: request.capability }),
     patterns: [...request.patterns],
     always: [...request.always],
     metadata: snapshotMetadata(request.metadata),
@@ -80,17 +79,11 @@ export const isAlwaysGranted = (
   input.always.length > 0 &&
   input.always.every((pattern) =>
     alwaysGranted.has(
-      permissionKey(input.sessionID, input.permission, pattern),
+      permissionKey(
+        input.sessionID,
+        input.permission,
+        input.capability,
+        pattern,
+      ),
     ),
   );
-
-export const rememberAlwaysGrant = (
-  alwaysGranted: Set<string>,
-  sessionID: string,
-  permission: string,
-  patterns: ReadonlyArray<string>,
-): void => {
-  for (const pattern of patterns) {
-    alwaysGranted.add(permissionKey(sessionID, permission, pattern));
-  }
-};

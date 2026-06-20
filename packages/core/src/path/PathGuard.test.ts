@@ -67,9 +67,11 @@ it.effect(
       }
 
       assert.strictEqual(request.permission, "external_directory");
+      assert.strictEqual(request.capability, "read");
       assert.deepStrictEqual(request.patterns, ["/outside/*"]);
       assert.deepStrictEqual(request.metadata, {
         filepath: "/outside/file.txt",
+        operation: "read",
         parentDir: "/outside",
       });
 
@@ -128,6 +130,7 @@ it.effect(
 
       assert.deepStrictEqual(request.metadata, {
         filepath: "/secret.txt",
+        operation: "read",
         parentDir: "/",
       });
 
@@ -240,6 +243,7 @@ it.effect("authorizes existing write targets by canonicalizing the leaf", () =>
 
     assert.deepStrictEqual(request.metadata, {
       filepath: "/outside/secret.txt",
+      operation: "create",
       parentDir: "/outside",
     });
 
@@ -282,6 +286,7 @@ it.effect(
 
       assert.deepStrictEqual(request.metadata, {
         filepath: "/outside/new.txt",
+        operation: "create",
         parentDir: "/outside",
       });
 
@@ -354,6 +359,7 @@ it.effect("resolves dangling symlink write target chains", () =>
 
     assert.deepStrictEqual(request.metadata, {
       filepath: "/outside/new.txt",
+      operation: "create",
       parentDir: "/outside",
     });
 

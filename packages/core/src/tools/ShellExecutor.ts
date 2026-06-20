@@ -23,6 +23,11 @@ export interface ShellExecutorShape {
 const rejectedShellError = (): ToolShellError =>
   new ToolShellError({ code: "unknown", message: "Shell execution failed" });
 
+const shellTimeout = "10 minutes";
+
+const timeoutShellError = (): ToolShellError =>
+  new ToolShellError({ code: "timeout", message: "Shell execution timed out" });
+
 const makeShellExecutor = Effect.fnUntraced(function* () {
   const environment = yield* ExecutionEnvironmentService;
   return {
@@ -49,7 +54,20 @@ const makeShellExecutor = Effect.fnUntraced(function* () {
             onStdout: captureChunk,
           }),
         catch: rejectedShellError,
-      });
+      }).pipe(
+        Effect.onInterrupt(() =>
+          Effect.sync(() => {
+            controller.abort();
+          }),
+        ),
+        Effect.timeoutOrElse({
+          duration: shellTimeout,
+          orElse: () =>
+            Effect.sync(() => {
+              controller.abort();
+            }).pipe(Effect.andThen(Effect.fail(timeoutShellError()))),
+        }),
+      );
       return yield* resolveShellExecutionResult(capture, result);
     }),
   } satisfies ShellExecutorShape;

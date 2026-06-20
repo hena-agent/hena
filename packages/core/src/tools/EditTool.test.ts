@@ -80,7 +80,7 @@ it.effect(
       Effect.provide(EffectPath.layer),
       Effect.provide(
         FileSystem.layerNoop({
-          stat: () => Effect.succeed(fileInfo()),
+          stat: () => Effect.succeed(fileInfo(FileSystem.Size(17))),
           readFileString: () => Effect.succeed("const value = 1;\n"),
           writeFileString: (path, content) =>
             Effect.sync(() => {
@@ -290,7 +290,8 @@ it.effect("rejects oversized edit targets before reading", () =>
   ),
 );
 
-it.effect("rejects oversized edit results before writing", () => {
+it.effect("rejects oversized replacement text before reading", () => {
+  let read = false;
   let wrote = false;
   return Effect.gen(function* () {
     const tool = yield* EditTool;
@@ -303,7 +304,8 @@ it.effect("rejects oversized edit results before writing", () => {
       .pipe(Effect.flip);
 
     assert.ok(error instanceof ToolInputError);
-    assert.strictEqual(error.message, "Edited file is too large to write.");
+    assert.strictEqual(error.message, "Replacement text is too large.");
+    assert.strictEqual(read, false);
     assert.strictEqual(wrote, false);
   }).pipe(
     Effect.provide(EditTool.Live),
@@ -313,7 +315,11 @@ it.effect("rejects oversized edit results before writing", () => {
     Effect.provide(
       FileSystem.layerNoop({
         stat: () => Effect.succeed(fileInfo()),
-        readFileString: () => Effect.succeed("small"),
+        readFileString: () =>
+          Effect.sync(() => {
+            read = true;
+            return "small";
+          }),
         writeFileString: () =>
           Effect.sync(() => {
             wrote = true;

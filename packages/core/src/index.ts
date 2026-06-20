@@ -26,7 +26,7 @@ export type { HarnessModelRuntime, SwitchHarnessModelResult } from "./model/thin
 export { resolveThinkingLevel, switchHarnessModel } from "./model/thinking";
 export type { CustomModelConfig, HenaModel, HenaThinkingLevel, ModelRef, ModelRegistryConfig, ModelRegistryShape } from "./model/types";
 export { PathGuard } from "./path/PathGuard";
-export type { PathGuardAuthorization, PathGuardAuthorizeOptions, PathGuardConfig, PathGuardShape, PathGuardTargetKind } from "./path/PathGuardTypes";
+export type { PathGuardAuthorization, PathGuardAuthorizeOptions, PathGuardConfig, PathGuardOperation, PathGuardShape, PathGuardTargetKind } from "./path/PathGuardTypes";
 export { PermissionService } from "./permission/PermissionService";
 export { PermissionDeniedError, PermissionDeny, PermissionEvent, PermissionGrant, PermissionID, PermissionMetadata, PermissionRequest, PermissionRequestNotFound } from "./permission/schema";
 export type { PermissionAskInput, PermissionServiceShape } from "./permission/types";

@@ -1,7 +1,8 @@
 import * as PiAgent from "@earendil-works/pi-agent-core";
 import * as PiNode from "@earendil-works/pi-agent-core/node";
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Fiber, Layer } from "effect";
+import { TestClock } from "effect/testing";
 import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
 import type { ExecutionEnvironment } from "../execution/ExecutionEnvProvider";
 import { BashTool, makeBashAgentTool } from "./BashTool";
@@ -21,6 +22,7 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
     private readonly result: ShellResult | Error,
     private readonly calls: Array<ShellCall>,
     private readonly streamOutput = true,
+    private readonly hang = false,
   ) {
     super({ cwd: "/workspace" });
   }
@@ -39,6 +41,11 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
     });
     if (this.result instanceof Error) {
       throw this.result;
+    }
+    if (this.hang) {
+      return new Promise<ShellResult>(() => {
+        // Intentionally never resolves to exercise timeout handling.
+      });
     }
     if (this.result.ok && this.streamOutput) {
       options?.onStdout?.(this.result.value.stdout);
@@ -67,14 +74,18 @@ const makeEnvironmentWithResult = (
   result: ShellResult | Error,
   calls: Array<ShellCall>,
   streamOutput = true,
+  hang = false,
 ) => {
-  const env = new FakeExecutionEnv(result, calls, streamOutput);
+  const env = new FakeExecutionEnv(result, calls, streamOutput, hang);
   return Layer.succeed(ExecutionEnvironmentService)({
     cwd: "/workspace",
     roots: ["/workspace"],
     env,
   } satisfies ExecutionEnvironment);
 };
+
+const makeHangingEnvironment = (calls: Array<ShellCall>) =>
+  makeEnvironmentWithResult(shellResult("", 0), calls, true, true);
 
 it.effect("runs shell commands in the workspace cwd", () => {
   const calls: Array<ShellCall> = [];
@@ -203,6 +214,30 @@ it.effect("passes abort signals to the execution environment", () => {
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeEnvironment("", 0, calls)),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  );
+});
+
+it.effect("aborts and fails shell executions that exceed the timeout", () => {
+  const calls: Array<ShellCall> = [];
+
+  return Effect.gen(function* () {
+    const tool = yield* BashTool;
+    const fiber = yield* tool
+      .execute({ command: "sleep 600" })
+      .pipe(Effect.flip, Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    assert.strictEqual(calls[0]?.abortSignal?.aborted, false);
+    yield* TestClock.adjust("10 minutes");
+    const error = yield* Fiber.join(fiber);
+
+    assert.ok(error instanceof ToolShellError);
+    assert.strictEqual(error.code, "timeout");
+    assert.strictEqual(calls[0]?.abortSignal?.aborted, true);
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(makeHangingEnvironment(calls)),
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   );
 });

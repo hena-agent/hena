@@ -2,7 +2,6 @@ import { Deferred, Effect } from "effect";
 
 import { installRequest, publishAsked } from "./askInstall";
 import { type PendingRequestStore, rejectEntries } from "./store";
-import { takePending } from "./takePending";
 
 const guardInstall = <
   Input,
@@ -18,7 +17,7 @@ const guardInstall = <
   effect: Effect.Effect<A, E, R>,
 ): Effect.Effect<A, E, R> => store.options.guardInstall?.(effect) ?? effect;
 
-const rejectInterrupted = <
+export const rejectInterrupted = <
   Input,
   Request extends { readonly id: string },
   Value,
@@ -28,16 +27,25 @@ const rejectInterrupted = <
   store: PendingRequestStore<Input, Request, Value, Failure, Event>,
   requestID: string,
 ): Effect.Effect<void> =>
-  takePending(store, requestID).pipe(
-    Effect.flatMap((entry) =>
-      entry === undefined
-        ? Effect.sync(() => {
-            store.cancelled.add(requestID);
-          })
-        : rejectEntries(store, [entry]),
-    ),
-    Effect.uninterruptible,
-  );
+  store.lock
+    .withPermit(
+      Effect.sync(() => {
+        const entry = store.pending.get(requestID);
+        if (entry !== undefined) {
+          store.pending.delete(requestID);
+          return entry;
+        }
+        if (store.settling.has(requestID)) {
+          store.cancelled.add(requestID);
+        }
+        return undefined;
+      }).pipe(
+        Effect.flatMap((entry) =>
+          entry === undefined ? Effect.void : rejectEntries(store, [entry]),
+        ),
+      ),
+    )
+    .pipe(Effect.uninterruptible);
 
 export const askPendingRequest = Effect.fnUntraced(function* <
   Input,

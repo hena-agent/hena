@@ -4,6 +4,8 @@ import { compileGlobEffect } from "./globMatch";
 import { grepFileStream } from "./grepFileStream";
 import {
   collectGrepMatches,
+  type GrepCollectionState,
+  isGrepScanBudgetExhausted,
   makeGrepCollectionState,
 } from "./grepMatchCollector";
 import type { ToolInputError } from "./toolErrors";
@@ -17,6 +19,14 @@ export interface GrepMatch {
 export interface GrepResult {
   readonly matches: ReadonlyArray<GrepMatch>;
   readonly truncated: boolean;
+}
+
+export interface GrepFileInput {
+  readonly file: string;
+  readonly fs: FileSystem.FileSystem;
+  readonly limit: number;
+  readonly pattern: RegExp;
+  readonly scanState?: GrepCollectionState | undefined;
 }
 
 type IncludeMatcher = (relativePath: string, basename: string) => boolean;
@@ -35,15 +45,18 @@ export const makeIncludeMatcher: (
 );
 
 export const grepFile: (
-  fs: FileSystem.FileSystem,
-  pattern: RegExp,
-  file: string,
-  limit: number,
+  input: GrepFileInput,
 ) => Effect.Effect<GrepResult, PlatformError> = Effect.fnUntraced(
-  function* (fs, pattern, file, limit) {
-    return yield* grepFileStream(fs, pattern, file, limit);
+  function* (input) {
+    return yield* grepFileStream(input);
   },
 );
+
+const isGrepComplete = (
+  matches: ReadonlyArray<GrepMatch>,
+  limit: number,
+  state: GrepCollectionState,
+): boolean => matches.length >= limit || isGrepScanBudgetExhausted(state);
 
 export const grepFiles = Effect.fnUntraced(function* (
   fs: FileSystem.FileSystem,
@@ -55,18 +68,20 @@ export const grepFiles = Effect.fnUntraced(function* (
   const state = makeGrepCollectionState();
   let truncated = false;
   for (const file of files) {
-    if (matches.length >= limit) {
+    if (isGrepComplete(matches, limit, state)) {
       return { matches, truncated: true } satisfies GrepResult;
     }
-    const result = yield* grepFile(fs, pattern, file, limit - matches.length);
-    if (!collectGrepMatches(matches, state, result.matches)) {
+    const result = yield* grepFile({
+      fs,
+      pattern,
+      file,
+      limit: limit - matches.length,
+      scanState: state,
+    });
+    const collected = collectGrepMatches(matches, state, result.matches);
+    truncated = truncated || result.truncated || !collected;
+    if (!collected || isGrepComplete(matches, limit, state)) {
       return { matches, truncated: true } satisfies GrepResult;
-    }
-    if (result.truncated) {
-      truncated = true;
-      if (matches.length >= limit) {
-        return { matches, truncated } satisfies GrepResult;
-      }
     }
   }
   return { matches, truncated } satisfies GrepResult;

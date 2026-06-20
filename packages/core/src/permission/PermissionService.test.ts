@@ -97,6 +97,51 @@ it.effect("keeps always grants scoped to a session", () =>
   }).pipe(Effect.provide(PermissionService.Live)),
 );
 
+it.effect("keeps always grants scoped to a capability", () =>
+  Effect.gen(function* () {
+    const service = yield* PermissionService;
+    const firstFiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        capability: "read",
+        patterns: ["/outside/*"],
+        always: ["/outside/*"],
+        metadata: {},
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [first] = yield* service.list();
+    if (first === undefined) {
+      throw new Error("expected a pending permission request");
+    }
+    yield* service.grant({ requestID: first.id, scope: "always" });
+    yield* Fiber.join(firstFiber);
+
+    const secondFiber = yield* service
+      .ask({
+        sessionID: "session-1",
+        permission: "external_directory",
+        capability: "write",
+        patterns: ["/outside/*"],
+        always: ["/outside/*"],
+        metadata: {},
+      })
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    const [second] = yield* service.list();
+    if (second === undefined) {
+      throw new Error("expected write to require its own permission");
+    }
+    assert.strictEqual(second.capability, "write");
+
+    yield* service.deny({ requestID: second.id });
+    yield* Fiber.join(secondFiber).pipe(Effect.exit);
+  }).pipe(Effect.provide(PermissionService.Live)),
+);
+
 it.effect("always grants resolve already pending matching requests", () =>
   Effect.gen(function* () {
     const service = yield* PermissionService;

@@ -12,6 +12,7 @@ export const PermissionRequest = Schema.Struct({
   id: PermissionID,
   sessionID: Schema.String,
   permission: Schema.String,
+  capability: Schema.optional(Schema.String),
   patterns: Schema.Array(Schema.String),
   always: Schema.Array(Schema.String),
   metadata: PermissionMetadata,

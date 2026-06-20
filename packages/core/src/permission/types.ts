@@ -15,6 +15,7 @@ import type {
 
 export interface PermissionAskInput {
   readonly always: ReadonlyArray<string>;
+  readonly capability?: string | undefined;
   readonly metadata: PermissionMetadata;
   readonly patterns: ReadonlyArray<string>;
   readonly permission: string;

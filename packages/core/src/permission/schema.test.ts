@@ -17,6 +17,7 @@ it("decodes permission request and event DTOs", () => {
     id: "per-1",
     sessionID: "session-1",
     permission: "external_directory",
+    capability: "read",
     patterns: ["/outside/*"],
     always: ["/outside/*"],
     metadata: { filepath: "/outside/file.txt", parentDir: "/outside" },
@@ -44,6 +45,7 @@ it("decodes permission request and event DTOs", () => {
   const event = Schema.decodeUnknownSync(PermissionEvent)(granted);
 
   assert.strictEqual(asked.request.tool?.callID, "call-1");
+  assert.strictEqual(asked.request.capability, "read");
   assert.deepStrictEqual(asked.request.metadata, {
     filepath: "/outside/file.txt",
     parentDir: "/outside",
@@ -58,6 +60,7 @@ it("rejects non-JSON permission metadata", () => {
       id: "per-1",
       sessionID: "session-1",
       permission: "external_directory",
+      capability: "read",
       patterns: ["/outside/*"],
       always: ["/outside/*"],
       metadata: { value: 1n },

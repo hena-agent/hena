@@ -45,20 +45,23 @@ export const finalizeSettlement = <
         if (store.closed || store.settling.get(requestID) !== entry) {
           return false;
         }
-        store.settling.delete(requestID);
-        store.cancelled.delete(requestID);
         return true;
-      }),
-    )
-    .pipe(
-      Effect.flatMap((owned) =>
-        owned
-          ? publishSettlement(store, settlement).pipe(
-              Effect.andThen(complete(entry, settlement)),
-              Effect.as(true),
-            )
-          : Effect.succeed(false),
+      }).pipe(
+        Effect.flatMap((owned) =>
+          owned
+            ? publishSettlement(store, settlement).pipe(
+                Effect.andThen(complete(entry, settlement)),
+                Effect.andThen(
+                  Effect.sync(() => {
+                    store.settling.delete(requestID);
+                    store.cancelled.delete(requestID);
+                  }),
+                ),
+                Effect.as(true),
+              )
+            : Effect.succeed(false),
+        ),
       ),
-      Effect.uninterruptible,
-    );
+    )
+    .pipe(Effect.uninterruptible);
 };

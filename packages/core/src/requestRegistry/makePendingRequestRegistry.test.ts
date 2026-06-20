@@ -8,7 +8,8 @@ import {
   Semaphore,
   Stream,
 } from "effect";
-
+import { rejectInterrupted } from "./ask";
+import { finalizeSettlement } from "./finalizeSettlement";
 import { closeStore } from "./lifecycle";
 import { makePendingRequestRegistry } from "./makePendingRequestRegistry";
 import { makePendingRequestStore } from "./store";
@@ -154,6 +155,74 @@ it.effect("ignores repeated registry close calls", () =>
     yield* closeStore(store);
 
     assert.strictEqual(store.closed, true);
+  }),
+);
+
+it.effect("keeps finalizing settlements owned until completion", () =>
+  Effect.gen(function* () {
+    const events = yield* PubSub.unbounded<Event>();
+    const lock = yield* Semaphore.make(1);
+    const store = makePendingRequestStore<
+      Input,
+      Request,
+      string,
+      string,
+      Event
+    >(registryOptions, events, lock);
+    const deferred = yield* Deferred.make<string, string>();
+    const entry = {
+      deferred,
+      request: { id: "req-0", label: "wait" },
+    };
+    const commitStarted = yield* Deferred.make<void>();
+    const releaseCommit = yield* Deferred.make<void>();
+    store.settling.set("req-0", entry);
+
+    const settlement = yield* finalizeSettlement({
+      store,
+      requestID: "req-0",
+      entry,
+      settlement: {
+        value: "accepted",
+        event: { type: "resolved", requestID: "req-0" } satisfies Event,
+        commit: Deferred.succeed(commitStarted, undefined).pipe(
+          Effect.andThen(Deferred.await(releaseCommit)),
+        ),
+      },
+      complete: (pendingEntry, success) =>
+        Deferred.succeed(pendingEntry.deferred, success.value),
+    }).pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Deferred.await(commitStarted);
+    const closing = yield* closeStore(store).pipe(
+      Effect.forkDetach({ startImmediately: true }),
+    );
+    yield* Effect.yieldNow;
+    assert.strictEqual(store.closed, false);
+
+    yield* Deferred.succeed(releaseCommit, undefined);
+    assert.strictEqual(yield* Fiber.join(settlement), true);
+    yield* Fiber.join(closing);
+    assert.strictEqual(yield* Deferred.await(deferred), "accepted");
+    assert.strictEqual(store.closed, true);
+  }),
+);
+
+it.effect("ignores interrupt cleanup for finalized requests", () =>
+  Effect.gen(function* () {
+    const events = yield* PubSub.unbounded<Event>();
+    const lock = yield* Semaphore.make(1);
+    const store = makePendingRequestStore<
+      Input,
+      Request,
+      string,
+      string,
+      Event
+    >(registryOptions, events, lock);
+
+    yield* rejectInterrupted(store, "req-0");
+
+    assert.strictEqual(store.cancelled.has("req-0"), false);
   }),
 );
 
@@ -389,6 +458,28 @@ it.effect("does not reject interrupted waiters after settlement claims", () =>
         (yield* Fiber.join(eventsFiber)).map((event) => event.type),
         ["asked", "resolved"],
       );
+    }),
+  ),
+);
+
+it.effect("ignores waiter interruption after settlement completion", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makeRegistry();
+      const waiter = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      yield* registry.succeed("req-0", "missing", (request) =>
+        Effect.succeed({
+          value: "accepted",
+          event: { type: "resolved", requestID: request.id },
+        }),
+      );
+      yield* Fiber.interrupt(waiter);
+
+      assert.deepStrictEqual(yield* registry.list(), []);
     }),
   ),
 );

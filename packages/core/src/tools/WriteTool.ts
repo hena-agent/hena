@@ -57,7 +57,9 @@ const makeWriteTool = Effect.fnUntraced(function* () {
       );
       const authorization = yield* pathGuard.authorizeCreateFile(
         requested,
-        tool === undefined ? undefined : { tool },
+        tool === undefined
+          ? { operation: "write" }
+          : { operation: "write", tool },
       );
       const bytes = yield* writeContentBytes(params.content);
       yield* fs.writeFileString(authorization.canonicalPath, params.content);

@@ -1,7 +1,8 @@
 import { assert, it } from "@effect/vitest";
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Fiber, Layer } from "effect";
+import { TestClock } from "effect/testing";
 import { HttpClient, HttpClientResponse } from "effect/unstable/http";
-
+import { ToolHttpError } from "./toolErrors";
 import { makeWebfetchAgentTool, WebfetchTool } from "./WebfetchTool";
 
 const makeClient = (body: string, status = 200) =>
@@ -10,6 +11,13 @@ const makeClient = (body: string, status = 200) =>
       Effect.succeed(
         HttpClientResponse.fromWeb(request, new Response(body, { status })),
       ),
+    ),
+  );
+
+const makeHangingClient = (capture?: (signal: AbortSignal) => void) =>
+  Layer.succeed(HttpClient.HttpClient)(
+    HttpClient.make((_request, _url, signal) =>
+      Effect.sync(() => capture?.(signal)).pipe(Effect.andThen(Effect.never)),
     ),
   );
 
@@ -79,6 +87,58 @@ it.effect("fails non-success HTTP responses", () =>
     Effect.provide(makeClient("no", 404)),
   ),
 );
+
+it.effect("fails webfetch calls that exceed the timeout", () =>
+  Effect.gen(function* () {
+    const tool = yield* WebfetchTool;
+    const fiber = yield* tool
+      .execute({ url: "https://example.test/slow" })
+      .pipe(Effect.flip, Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    yield* TestClock.adjust("30 seconds");
+    const error = yield* Fiber.join(fiber);
+
+    assert.ok(error instanceof ToolHttpError);
+    assert.strictEqual(error.message, "Webfetch timed out.");
+  }).pipe(
+    Effect.provide(WebfetchTool.Live),
+    Effect.provide(makeHangingClient()),
+  ),
+);
+
+it.effect("propagates tool abort signals to the HTTP transport", () => {
+  let requestSignal: AbortSignal | undefined;
+  const controller = new AbortController();
+  return Effect.gen(function* () {
+    const tool = yield* WebfetchTool;
+    const fiber = yield* tool
+      .execute(
+        { url: "https://example.test/slow" },
+        {
+          toolCallId: "call-webfetch",
+          signal: controller.signal,
+          update: () => Effect.void,
+        },
+      )
+      .pipe(Effect.forkDetach({ startImmediately: true }));
+
+    yield* Effect.yieldNow;
+    assert.strictEqual(requestSignal?.aborted, false);
+    controller.abort();
+    const exit = yield* Fiber.join(fiber).pipe(Effect.exit);
+
+    assert.strictEqual(exit._tag, "Failure");
+    assert.strictEqual(requestSignal?.aborted, true);
+  }).pipe(
+    Effect.provide(WebfetchTool.Live),
+    Effect.provide(
+      makeHangingClient((signal) => {
+        requestSignal = signal;
+      }),
+    ),
+  );
+});
 
 it("adapts WebfetchTool to a pi AgentTool", async () => {
   const tool = makeWebfetchAgentTool(

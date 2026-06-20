@@ -2,16 +2,31 @@ import type { GrepMatch } from "./grepOperations";
 import { boundUtf8Text } from "./textBounds";
 
 const maxGrepOutputBytes = 1024 * 1024;
+const maxGrepScannedBytes = 8 * 1024 * 1024;
 
 export interface GrepCollectionState {
   bytes: number;
   currentPath: string;
+  scannedBytes: number;
 }
 
 export const makeGrepCollectionState = (): GrepCollectionState => ({
   bytes: 0,
   currentPath: "",
+  scannedBytes: 0,
 });
+
+export const collectGrepScannedBytes = (
+  state: GrepCollectionState,
+  bytes: number,
+): boolean => {
+  state.scannedBytes += bytes;
+  return state.scannedBytes <= maxGrepScannedBytes;
+};
+
+export const isGrepScanBudgetExhausted = (
+  state: GrepCollectionState,
+): boolean => state.scannedBytes >= maxGrepScannedBytes;
 
 export const collectGrepMatch = (
   matches: Array<GrepMatch>,

@@ -2,7 +2,7 @@ import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
-import { ensureEditSize } from "./editBounds";
+import { ensureEditSize, measureEditTextBytes } from "./editBounds";
 import { editContent } from "./editOperations";
 import {
   type EditToolDetails,
@@ -23,8 +23,6 @@ import { resolvePath, ToolWorkspace } from "./workspace";
 
 export type EditToolShape = ToolShape<EditToolInput, EditToolDetails>;
 
-const encoder = new TextEncoder();
-
 const makeEditTool = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem.FileSystem;
   const pathService = yield* EffectPath.Path;
@@ -42,6 +40,7 @@ const makeEditTool = Effect.fnUntraced(function* () {
         params.filePath,
       );
       const authorization = yield* pathGuard.authorizeExistingPath(requested, {
+        operation: "edit",
         ...(tool === undefined ? {} : { tool }),
       });
       if (authorization.kind !== "file") {
@@ -51,14 +50,22 @@ const makeEditTool = Effect.fnUntraced(function* () {
       }
       const info = yield* fs.stat(authorization.canonicalPath);
       yield* ensureEditSize(info.size, "File is too large to edit.");
+      const oldBytes = yield* measureEditTextBytes(
+        params.oldString,
+        "String to replace is too large.",
+      );
+      const newBytes = yield* measureEditTextBytes(
+        params.newString,
+        "Replacement text is too large.",
+      );
+      const bytes = Number(info.size) - oldBytes + newBytes;
+      yield* ensureEditSize(bytes, "Edited file is too large to write.");
       const current = yield* fs.readFileString(authorization.canonicalPath);
       const edit = yield* editContent(
         current,
         params.oldString,
         params.newString,
       );
-      const bytes = encoder.encode(edit.content).length;
-      yield* ensureEditSize(bytes, "Edited file is too large to write.");
       yield* fs.writeFileString(authorization.canonicalPath, edit.content);
       return {
         content: [{ type: "text", text: "Edited file successfully." }],
@@ -81,7 +88,6 @@ export class EditTool extends Context.Service<EditTool, EditToolShape>()(
     FileSystem.FileSystem | EffectPath.Path | PathGuard | ToolWorkspace
   > = Layer.effect(EditTool)(makeEditTool());
 }
-
 export const makeEditAgentTool = (
   context: Context.Context<EditTool>,
 ): CoreAgentTool<EditToolDetails> =>

@@ -57,6 +57,7 @@ const makeReadTool = Effect.fnUntraced(function* () {
         params.filePath,
       );
       const authorization = yield* pathGuard.authorizeExistingPath(requested, {
+        operation: "read",
         ...(tool === undefined ? {} : { tool }),
       });
       if (authorization.kind === "directory") {

@@ -5,6 +5,7 @@ import { externalDirectoryPattern, isInsideRoot } from "./helpers";
 import type {
   PathGuardAuthorization,
   PathGuardAuthorizeOptions,
+  PathGuardOperation,
   PathGuardTargetKind,
 } from "./PathGuardTypes";
 
@@ -12,6 +13,7 @@ interface AuthorizeCanonicalPathInput {
   readonly canonicalPath: string;
   readonly options: PathGuardAuthorizeOptions & {
     readonly kind: PathGuardTargetKind;
+    readonly operation: PathGuardOperation;
   };
   readonly pathService: EffectPath.Path;
   readonly permission: PermissionServiceShape;
@@ -21,9 +23,15 @@ interface AuthorizeCanonicalPathInput {
 
 export const withPathGuardTool = (
   kind: PathGuardTargetKind,
+  operation: PathGuardOperation,
   options?: Omit<PathGuardAuthorizeOptions, "kind">,
-): PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind } =>
-  options?.tool === undefined ? { kind } : { kind, tool: options.tool };
+): PathGuardAuthorizeOptions & {
+  readonly kind: PathGuardTargetKind;
+  readonly operation: PathGuardOperation;
+} =>
+  options?.tool === undefined
+    ? { kind, operation }
+    : { kind, operation, tool: options.tool };
 
 export const authorizeCanonicalPath = Effect.fnUntraced(function* (
   input: AuthorizeCanonicalPathInput,
@@ -45,9 +53,14 @@ export const authorizeCanonicalPath = Effect.fnUntraced(function* (
   yield* permission.ask({
     sessionID,
     permission: "external_directory",
+    capability: options.operation,
     patterns: [pattern],
     always: [pattern],
-    metadata: { filepath: canonicalPath, parentDir },
+    metadata: {
+      filepath: canonicalPath,
+      parentDir,
+      operation: options.operation,
+    },
     tool: options.tool,
   });
   return {

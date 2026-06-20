@@ -47,7 +47,9 @@ export const executeDirectorySearch = Effect.fnUntraced(function* <
   const tool = toolReferenceFromContext(context);
   const authorization = yield* pathGuard.authorizeExistingPath(
     requested,
-    tool === undefined ? {} : { tool },
+    tool === undefined
+      ? { operation: "search" }
+      : { operation: "search", tool },
   );
   const authorize = makeDirectorySearchAuthorize({
     fs,

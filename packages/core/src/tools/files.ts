@@ -2,7 +2,7 @@ import { Effect, type Path as EffectPath, type FileSystem } from "effect";
 
 import {
   maxSearchScannedEntries,
-  selectDirectoryEntries,
+  readBoundedDirectory,
 } from "./directoryEntryBounds";
 import { makeFileSearchCollector } from "./fileSearchCollector";
 import type {
@@ -40,9 +40,7 @@ export const searchFiles = Effect.fnUntraced(function* (
         return;
       }
       visitedDirectories.add(canonicalDir);
-      const directoryEntries = selectDirectoryEntries(
-        yield* fs.readDirectory(canonicalDir),
-      );
+      const directoryEntries = yield* readBoundedDirectory(fs, canonicalDir);
       if (directoryEntries.truncated) {
         collector.markTruncated();
       }

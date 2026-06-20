@@ -18,6 +18,7 @@ it("preserves permission tool message and call ids", () => {
     id: "per-1",
     sessionID: "session-1",
     permission: "external_directory",
+    capability: "read",
     patterns: ["/outside/*"],
     always: ["/outside/*"],
     metadata: {},
@@ -29,4 +30,5 @@ it("preserves permission tool message and call ids", () => {
     messageID: "msg-1",
     callID: "call-1",
   });
+  assert.strictEqual(request.capability, "read");
 });

@@ -40,7 +40,9 @@ export const makeDirectorySearchAuthorize = (
 
     const authorization = yield* input.pathGuard.authorizeExistingPath(
       canonicalPath,
-      input.tool === undefined ? {} : { tool: input.tool },
+      input.tool === undefined
+        ? { operation: "search" }
+        : { operation: "search", tool: input.tool },
     );
     if (authorization.kind === "directory") {
       authorizedDirectories.add(authorization.canonicalPath);

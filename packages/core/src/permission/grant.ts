@@ -1,7 +1,8 @@
 import { Effect, type Semaphore } from "effect";
 
 import type { PendingRequestSuccess } from "../requestRegistry/types";
-import { isAlwaysGranted, rememberAlwaysGrant } from "./request";
+import { rememberAlwaysGrant } from "./grantKey";
+import { isAlwaysGranted } from "./request";
 import {
   type PermissionEvent,
   type PermissionGrant,
@@ -33,12 +34,13 @@ const grantRequest = (
     ...(isAlways
       ? {
           commit: Effect.sync(() => {
-            rememberAlwaysGrant(
-              state.alwaysGranted,
-              request.sessionID,
-              request.permission,
+            rememberAlwaysGrant({
+              alwaysGranted: state.alwaysGranted,
+              capability: request.capability,
               patterns,
-            );
+              permission: request.permission,
+              sessionID: request.sessionID,
+            });
           }),
         }
       : {}),

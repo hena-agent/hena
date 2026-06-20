@@ -5,9 +5,16 @@ import type { PermissionDeniedError } from "../permission/schema";
 import type { ToolRef as ToolRefType } from "../toolRef";
 
 export type PathGuardTargetKind = "file" | "directory";
+export type PathGuardOperation =
+  | "create"
+  | "edit"
+  | "read"
+  | "search"
+  | "write";
 
 export interface PathGuardAuthorizeOptions {
   readonly kind?: PathGuardTargetKind;
+  readonly operation?: PathGuardOperation;
   readonly tool?: ToolRefType | undefined;
 }
 

@@ -1,6 +1,6 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Effect, type FileSystem } from "effect";
-import { selectDirectoryEntries } from "./directoryEntryBounds";
+import { readBoundedDirectory } from "./directoryEntryBounds";
 import type { ReadToolParameters } from "./ReadTool";
 import type { ReadToolDetails } from "./readDetails";
 import { readLineWindow } from "./readLineWindow";
@@ -64,9 +64,7 @@ export const readDirectory = Effect.fnUntraced(function* (
   fs: FileSystem.FileSystem,
   path: string,
 ) {
-  const directoryEntries = selectDirectoryEntries(
-    yield* fs.readDirectory(path),
-  );
+  const directoryEntries = yield* readBoundedDirectory(fs, path);
   const sorted = [...directoryEntries.entries].sort((left, right) =>
     left.localeCompare(right),
   );

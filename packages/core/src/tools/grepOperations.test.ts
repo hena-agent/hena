@@ -2,6 +2,10 @@ import { assert, it } from "@effect/vitest";
 import { Effect, FileSystem, Stream } from "effect";
 
 import { formatMatches } from "./grepFormat";
+import {
+  collectGrepScannedBytes,
+  makeGrepCollectionState,
+} from "./grepMatchCollector";
 import { grepFile, grepFiles, makeIncludeMatcher } from "./grepOperations";
 
 const fileLayer = (read: (path: string) => string) =>
@@ -42,6 +46,30 @@ it.effect(
     }).pipe(Effect.provide(fileLayer(() => "needle"))),
 );
 
+it.effect("does not read files when the match limit is already reached", () => {
+  let pulls = 0;
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* grepFiles(fs, /needle/, ["/workspace/a.ts"], 0);
+
+    assert.deepStrictEqual(result, { matches: [], truncated: true });
+    assert.strictEqual(pulls, 0);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        stream: () =>
+          Stream.make(new TextEncoder().encode("needle")).pipe(
+            Stream.tap(() =>
+              Effect.sync(() => {
+                pulls += 1;
+              }),
+            ),
+          ),
+      }),
+    ),
+  );
+});
+
 it.effect("propagates per-file grep truncation", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -57,7 +85,12 @@ it.effect("propagates per-file grep truncation", () =>
 it.effect("greps matching lines from a file", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const result = yield* grepFile(fs, /needle/, "/workspace/a.ts", 10);
+    const result = yield* grepFile({
+      fs,
+      pattern: /needle/,
+      file: "/workspace/a.ts",
+      limit: 10,
+    });
 
     assert.deepStrictEqual(result.matches, [
       { path: "/workspace/a.ts", line: 2, text: "needle" },
@@ -69,7 +102,12 @@ it.effect("greps matching lines from a file", () =>
 it.effect("reports truncated grep results", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const result = yield* grepFile(fs, /needle/, "/workspace/a.ts", 1);
+    const result = yield* grepFile({
+      fs,
+      pattern: /needle/,
+      file: "/workspace/a.ts",
+      limit: 1,
+    });
 
     assert.deepStrictEqual(result.matches, [
       { path: "/workspace/a.ts", line: 1, text: "needle" },
@@ -118,7 +156,12 @@ it.effect("stops grepping empty-line files at the input byte cap", () => {
   const chunk = new TextEncoder().encode("\n".repeat(600_000));
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const result = yield* grepFile(fs, /needle/, "/workspace/large.log", 10);
+    const result = yield* grepFile({
+      fs,
+      pattern: /needle/,
+      file: "/workspace/large.log",
+      limit: 10,
+    });
 
     assert.strictEqual(result.truncated, true);
     assert.strictEqual(pulls, 2);
@@ -137,6 +180,57 @@ it.effect("stops grepping empty-line files at the input byte cap", () => {
     ),
   );
 });
+
+it.effect("stops no-match searches at the total scan byte budget", () => {
+  let pulls = 0;
+  const chunk = new TextEncoder().encode("x".repeat(1024 * 1024));
+  const files = Array.from(
+    { length: 20 },
+    (_, index) => `/workspace/file-${index}.log`,
+  );
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* grepFiles(fs, /needle/, files, 10);
+
+    assert.deepStrictEqual(result.matches, []);
+    assert.strictEqual(result.truncated, true);
+    assert.strictEqual(pulls, 8);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        stream: () =>
+          Stream.make(chunk).pipe(
+            Stream.tap(() =>
+              Effect.sync(() => {
+                pulls += 1;
+              }),
+            ),
+          ),
+      }),
+    ),
+  );
+});
+
+it.effect(
+  "marks a file grep truncated when the scan budget is exhausted",
+  () => {
+    const state = makeGrepCollectionState();
+    collectGrepScannedBytes(state, 8 * 1024 * 1024);
+    return Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const result = yield* grepFile({
+        fs,
+        pattern: /needle/,
+        file: "/workspace/a.ts",
+        limit: 10,
+        scanState: state,
+      });
+
+      assert.deepStrictEqual(result.matches, []);
+      assert.strictEqual(result.truncated, true);
+    }).pipe(Effect.provide(fileLayer(() => "needle")));
+  },
+);
 
 it("formats grouped grep matches", () => {
   assert.strictEqual(

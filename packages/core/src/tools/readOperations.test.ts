@@ -49,6 +49,17 @@ it.effect("formats file lines", () =>
   }).pipe(Effect.provide(fileLayer("a\nb"))),
 );
 
+it.effect("reports an empty emitted line range for empty files", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readFile(fs, "/file.txt", {
+      filePath: "/file.txt",
+    });
+
+    assert.strictEqual(result.details.lineEnd, 0);
+  }).pipe(Effect.provide(fileLayer(""))),
+);
+
 it.effect("uses default file line range", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -76,6 +87,20 @@ it.effect("caps requested file line ranges", () =>
     assert.strictEqual(result.details.lineEnd, 2000);
     assert.strictEqual(result.details.truncated, true);
   }).pipe(Effect.provide(fileLayer("x\n".repeat(3000)))),
+);
+
+it.effect("reports emitted line end after output truncation", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readFile(fs, "/file.txt", {
+      filePath: "/file.txt",
+      limit: 2,
+    });
+
+    assert.strictEqual(result.details.lineEnd, 1);
+    assert.strictEqual(result.details.totalLines, 2);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(Effect.provide(fileLayer(`${"x".repeat(1024 * 1024)}\nsecond`))),
 );
 
 it.effect("trims carriage returns from CRLF lines", () =>

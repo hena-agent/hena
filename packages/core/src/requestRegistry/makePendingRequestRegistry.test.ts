@@ -34,6 +34,7 @@ const registryOptions: PendingRequestRegistryOptions<
   Input,
   Request,
   string,
+  string,
   Event
 > = {
   idPrefix: "req",
@@ -264,9 +265,12 @@ it.effect("rejects settling waiters when the registry closes", () =>
 
     const waiterError = yield* Fiber.join(setup.waiter).pipe(Effect.flip);
     yield* Deferred.succeed(setup.releaseSettlement, undefined);
-    yield* Fiber.join(setup.settlement).pipe(Effect.exit);
+    const settlementError = yield* Fiber.join(setup.settlement).pipe(
+      Effect.flip,
+    );
 
     assert.strictEqual(waiterError, "closed");
+    assert.strictEqual(settlementError, "missing");
     assert.strictEqual(committed, false);
   }),
 );

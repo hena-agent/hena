@@ -14,20 +14,24 @@ export const restoreSettlingOnError = <
   requestID: string,
   entry: PendingRequestEntry<Request, Value, Failure>,
 ): Effect.Effect<void, never, never> =>
-  Effect.sync(() => {
-    store.settling.delete(requestID);
-    if (store.cancelled.delete(requestID)) {
-      return undefined;
-    }
-    if (!store.closed) {
-      store.pending.set(requestID, entry);
-      return undefined;
-    }
-    return store.options.rejectOnShutdown(entry.request).failure;
-  }).pipe(
-    Effect.flatMap((failure) =>
-      failure === undefined
-        ? Effect.void
-        : Deferred.fail(entry.deferred, failure).pipe(Effect.asVoid),
-    ),
-  );
+  store.lock
+    .withPermit(
+      Effect.sync(() => {
+        store.settling.delete(requestID);
+        if (store.cancelled.delete(requestID)) {
+          return undefined;
+        }
+        if (!store.closed) {
+          store.pending.set(requestID, entry);
+          return undefined;
+        }
+        return store.options.rejectOnShutdown(entry.request).failure;
+      }),
+    )
+    .pipe(
+      Effect.flatMap((failure) =>
+        failure === undefined
+          ? Effect.void
+          : Deferred.fail(entry.deferred, failure).pipe(Effect.asVoid),
+      ),
+    );

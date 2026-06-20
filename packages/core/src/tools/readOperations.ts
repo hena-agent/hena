@@ -15,6 +15,9 @@ interface DirectoryText {
   readonly truncated: boolean;
 }
 
+const countEmittedLines = (text: string): number =>
+  text.length === 0 ? 0 : text.split("\n").length;
+
 const formatDirectoryEntries = (
   entries: ReadonlyArray<string>,
 ): DirectoryText => {
@@ -44,13 +47,14 @@ export const readFile = Effect.fnUntraced(function* (
     .map((line, index) => `${lineStart + index}: ${line}`)
     .join("\n");
   const output = boundUtf8Text(body, maxReadOutputBytes);
+  const lineEnd = lineStart + countEmittedLines(output.text) - 1;
   return {
     content: [{ type: "text", text: output.text }],
     details: {
       path,
       type: "file",
       lineStart,
-      lineEnd: lineStart + window.lines.length - 1,
+      lineEnd,
       totalLines: window.totalLines,
       truncated: window.truncated || output.truncated,
     },

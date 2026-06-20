@@ -1,3 +1,5 @@
+import type { Schema } from "effect";
+
 import type { PermissionRequest } from "./schema";
 import type { PermissionAskInput } from "./types";
 
@@ -5,7 +7,7 @@ type PermissionTool = NonNullable<PermissionRequest["tool"]>;
 
 const snapshotTool = (tool: PermissionTool): PermissionTool => ({ ...tool });
 
-const snapshotMetadataValue = (value: unknown): unknown => {
+const snapshotMetadataValue = (value: Schema.Json): Schema.Json => {
   if (Array.isArray(value)) {
     return value.map(snapshotMetadataValue);
   }

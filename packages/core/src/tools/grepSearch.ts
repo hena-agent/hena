@@ -7,6 +7,7 @@ import type {
 import { searchFiles } from "./files";
 import { formatMatches } from "./grepFormat";
 import { grepFiles, makeIncludeMatcher } from "./grepOperations";
+import { isSafeRegexPattern } from "./safeRegex";
 import { ToolInputError } from "./toolErrors";
 
 interface GrepSearchParameters {
@@ -32,14 +33,22 @@ const maxGrepMatches = 1000;
 
 const compilePattern = (
   pattern: string,
-): Effect.Effect<RegExp, ToolInputError> =>
-  Effect.try({
+): Effect.Effect<RegExp, ToolInputError> => {
+  if (!isSafeRegexPattern(pattern)) {
+    return Effect.fail(
+      new ToolInputError({
+        message: "Unsafe regular expressions are not allowed.",
+      }),
+    );
+  }
+  return Effect.try({
     try: () => new RegExp(pattern),
     catch: (error: unknown) =>
       new ToolInputError({
         message: String(error),
       }),
   });
+};
 
 export const executeGrepSearch = Effect.fnUntraced(function* (
   input: GrepSearchInput,

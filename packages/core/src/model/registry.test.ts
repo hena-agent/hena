@@ -98,6 +98,44 @@ it.effect("snapshots model lists", () =>
   }),
 );
 
+it.effect("snapshots custom model nested DTOs", () =>
+  Effect.gen(function* () {
+    const custom = {
+      ...localModel,
+      cost: { input: 1, output: 2, cacheRead: 3, cacheWrite: 4 },
+      input: ["text", "image"],
+      thinkingLevelMap: { high: "medium" },
+    } satisfies CustomModelConfig;
+    const registry = yield* makeModelRegistry({ customModels: [custom] });
+    custom.cost.input = 99;
+    custom.input.push("text");
+    custom.thinkingLevelMap.high = "low";
+
+    const model = yield* registry.getModel({
+      provider: "local",
+      modelId: "llama3",
+    });
+    model.cost.input = 42;
+    model.input.push("text");
+    if (model.thinkingLevelMap !== undefined) {
+      model.thinkingLevelMap.high = "low";
+    }
+    const fresh = yield* registry.getModel({
+      provider: "local",
+      modelId: "llama3",
+    });
+
+    assert.deepStrictEqual(fresh.cost, {
+      input: 1,
+      output: 2,
+      cacheRead: 3,
+      cacheWrite: 4,
+    });
+    assert.deepStrictEqual(fresh.input, ["text", "image"]);
+    assert.deepStrictEqual(fresh.thinkingLevelMap, { high: "medium" });
+  }),
+);
+
 it.effect("snapshots default model configuration", () =>
   Effect.gen(function* () {
     const config = {

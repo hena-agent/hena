@@ -2,7 +2,12 @@ import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Context, Effect, Layer } from "effect";
 
 import { ExecutionEnvironmentService } from "../execution/ExecutionEnvironmentService";
-import { boundUtf8Text } from "./textBounds";
+import {
+  appendShellCapture,
+  boundedShellOutput,
+  makeShellAbortController,
+  makeShellOutputCapture,
+} from "./shellOutputCapture";
 import { ToolShellError } from "./toolErrors";
 
 interface ShellExecutionResult {
@@ -10,18 +15,6 @@ interface ShellExecutionResult {
   readonly output: string;
   readonly truncated: boolean;
 }
-
-const maxShellOutputBytes = 1024 * 1024;
-
-interface BoundedOutput {
-  readonly output: string;
-  readonly truncated: boolean;
-}
-
-const boundedOutput = (output: string): BoundedOutput => {
-  const bounded = boundUtf8Text(output, maxShellOutputBytes);
-  return { output: bounded.text, truncated: bounded.truncated };
-};
 
 export interface ShellExecutorShape {
   readonly execute: (
@@ -45,21 +38,39 @@ const makeShellExecutor = Effect.fnUntraced(function* () {
       cwd: string,
       signal?: AbortSignal,
     ) {
+      const controller = makeShellAbortController(signal);
+      const capture = makeShellOutputCapture();
+      const captureChunk = (chunk: string): void => {
+        appendShellCapture(capture, chunk);
+        if (capture.truncated) {
+          controller.abort();
+        }
+      };
       const result = yield* Effect.tryPromise({
         // oxlint-disable-next-line typescript/promise-function-async
         try: () =>
-          environment.env.exec(
-            commandText,
-            signal === undefined ? { cwd } : { cwd, abortSignal: signal },
-          ),
+          environment.env.exec(commandText, {
+            cwd,
+            abortSignal: controller.signal,
+            onStderr: captureChunk,
+            onStdout: captureChunk,
+          }),
         catch: rejectedShellError,
       });
       if (!result.ok) {
+        if (capture.truncated && result.error.code === "aborted") {
+          return {
+            output: capture.output,
+            exitCode: 1,
+            truncated: true,
+          } satisfies ShellExecutionResult;
+        }
         return yield* Effect.fail(shellError(result.error));
       }
-      const output = boundedOutput(
-        `${result.value.stdout}${result.value.stderr}`,
-      );
+      const output =
+        capture.output.length > 0 || capture.truncated
+          ? capture
+          : boundedShellOutput(`${result.value.stdout}${result.value.stderr}`);
       return {
         output: output.output,
         exitCode: result.value.exitCode,

@@ -39,6 +39,13 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
     if (this.result instanceof Error) {
       throw this.result;
     }
+    if (this.result.ok) {
+      options?.onStdout?.(this.result.value.stdout);
+      options?.onStderr?.(this.result.value.stderr);
+    }
+    if (options?.abortSignal?.aborted === true) {
+      return PiAgent.err(new PiAgent.ExecutionError("aborted", "aborted"));
+    }
     return this.result;
   }
 }
@@ -84,7 +91,9 @@ it.effect("runs shell commands in the workspace cwd", () => {
       truncated: false,
     });
 
-    assert.deepStrictEqual(calls, [{ command: "pwd", cwd: "/workspace" }]);
+    assert.strictEqual(calls[0]?.command, "pwd");
+    assert.strictEqual(calls[0]?.cwd, "/workspace");
+    assert.ok(calls[0]?.abortSignal instanceof AbortSignal);
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeEnvironment("/workspace", 0, calls)),
@@ -118,6 +127,7 @@ it.effect("truncates oversized shell output", () => {
     }
 
     assert.strictEqual(content.text.length, 1024 * 1024);
+    assert.strictEqual(result.details.exitCode, 1);
     assert.strictEqual(result.details.truncated, true);
   }).pipe(
     Effect.provide(BashTool.Live),
@@ -169,7 +179,9 @@ it.effect("passes abort signals to the execution environment", () => {
       },
     );
 
-    assert.strictEqual(calls[0]?.abortSignal, controller.signal);
+    assert.strictEqual(calls[0]?.abortSignal?.aborted, false);
+    controller.abort();
+    assert.strictEqual(calls[0]?.abortSignal?.aborted, true);
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeEnvironment("", 0, calls)),

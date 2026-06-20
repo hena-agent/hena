@@ -21,6 +21,7 @@ it.effect("creates local harness execution environments", () =>
       assert.strictEqual(environment.cwd, cwd);
       assert.deepStrictEqual(environment.roots, [cwd, `${cwd}/extra`]);
       assert.strictEqual(environment.env.cwd, cwd);
+      assert.strictEqual("cleanup" in environment, false);
 
       const custom = yield* provider.create({
         sessionID: "ses-local-custom",

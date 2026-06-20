@@ -1,4 +1,4 @@
-import type { Deferred, Effect, Stream } from "effect";
+import type { Deferred, Effect, Option, Stream } from "effect";
 
 export interface PendingRequestEntry<Request, Value, Failure> {
   readonly deferred: Deferred.Deferred<Value, Failure>;
@@ -28,12 +28,14 @@ export interface PendingRequestFailure<Failure, Event>
 export interface PendingRequestRegistryOptions<
   Input,
   Request extends { readonly id: string },
+  Value,
   Failure,
   Event,
 > {
   readonly askedEvent: (request: Request) => Event;
   readonly idPrefix: string;
   readonly makeRequest: (id: string, input: Input) => Request;
+  readonly resolveBeforeInstall?: (input: Input) => Option.Option<Value>;
   readonly rejectOnShutdown: (
     request: Request,
   ) => PendingRequestFailure<Failure, Event>;

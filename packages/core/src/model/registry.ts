@@ -1,8 +1,8 @@
 import * as PiAi from "@earendil-works/pi-ai";
 import { Effect } from "effect";
 
-import { toModel } from "./customModel";
-import { DefaultModelNotFoundError, ModelNotFoundError } from "./errors";
+import { snapshotModel, toModel } from "./customModel";
+import { requireDefaultModel, requireModel } from "./resolveModel";
 import type * as ModelTypes from "./types";
 
 export { DefaultModelNotFoundError, ModelNotFoundError } from "./errors";
@@ -28,7 +28,7 @@ const listModels = (
   for (const builtIn of PiAi.getProviders()
     .flatMap((provider) => PiAi.getModels(provider))
     .filter((model) => accepts(config, model))) {
-    models.set(`${builtIn.provider}\0${builtIn.id}`, builtIn);
+    models.set(`${builtIn.provider}\0${builtIn.id}`, snapshotModel(builtIn));
   }
   for (const model of (config.customModels ?? []).map(toModel)) {
     models.set(`${model.provider}\0${model.id}`, model);
@@ -43,26 +43,6 @@ const findModel = (
   models.find(
     (model) => model.provider === ref.provider && model.id === ref.modelId,
   );
-
-const missingModel = (ref: ModelTypes.ModelRef): ModelNotFoundError =>
-  new ModelNotFoundError({ provider: ref.provider, modelId: ref.modelId });
-
-const requireModel = (
-  model: ModelTypes.HenaModel | undefined,
-  ref: ModelTypes.ModelRef,
-): Effect.Effect<ModelTypes.HenaModel, ModelNotFoundError> =>
-  model === undefined ? Effect.fail(missingModel(ref)) : Effect.succeed(model);
-
-const requireDefaultModel = (
-  model: ModelTypes.HenaModel | undefined,
-): Effect.Effect<ModelTypes.HenaModel, DefaultModelNotFoundError> =>
-  model === undefined
-    ? Effect.fail(
-        new DefaultModelNotFoundError({
-          message: "No default model configured and no models are available",
-        }),
-      )
-    : Effect.succeed(model);
 
 export const makeModelRegistry = (
   config: ModelTypes.ModelRegistryConfig = {},
@@ -81,8 +61,10 @@ export const makeModelRegistry = (
       getModels: (provider?: string) =>
         Effect.succeed(
           provider === undefined
-            ? [...models]
-            : models.filter((model) => model.provider === provider),
+            ? models.map(snapshotModel)
+            : models
+                .filter((model) => model.provider === provider)
+                .map(snapshotModel),
         ),
       getModel: (ref: ModelTypes.ModelRef) =>
         requireModel(findModel(models, ref), ref),

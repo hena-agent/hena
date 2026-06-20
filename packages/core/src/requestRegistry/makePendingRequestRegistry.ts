@@ -1,6 +1,7 @@
 import { Effect, PubSub, Semaphore, Stream } from "effect";
 
-import { askPendingRequest, closeStore, listRequests } from "./lifecycle";
+import { askPendingRequest } from "./ask";
+import { closeStore, listRequests } from "./lifecycle";
 import { failPendingRequest, succeedPendingRequest } from "./settle";
 import { makePendingRequestStore } from "./store";
 import type {
@@ -16,7 +17,9 @@ export const makePendingRequestRegistry = Effect.fnUntraced(function* <
   Value,
   Failure,
   Event,
->(options: PendingRequestRegistryOptions<Input, Request, Failure, Event>) {
+>(
+  options: PendingRequestRegistryOptions<Input, Request, Value, Failure, Event>,
+) {
   type Registry = PendingRequestRegistry<Input, Request, Value, Failure, Event>;
   const events = yield* PubSub.unbounded<Event>();
   const lock = yield* Semaphore.make(1);

@@ -1,17 +1,13 @@
 import { Effect, Semaphore } from "effect";
 
 import { type HarnessServiceError, normalizeHarnessError } from "./errors";
-import { makeSwitchModelOperation } from "./switchModelOperation";
+import { makeHarnessServiceMethods } from "./serviceMethods";
 import type { HarnessLike, HarnessServiceShape } from "./types";
-
-type Args<Method extends keyof HarnessLike> = Parameters<HarnessLike[Method]>;
 
 const runPromise = <A>(
   run: () => PromiseLike<A>,
 ): Effect.Effect<A, HarnessServiceError> =>
   Effect.tryPromise({ try: run, catch: normalizeHarnessError });
-
-const runSync = <A>(run: () => A): Effect.Effect<A> => Effect.sync(run);
 
 const abortOnInterrupt = (harness: HarnessLike): Effect.Effect<void> =>
   runPromise(harness.abort.bind(harness)).pipe(Effect.ignore);
@@ -49,51 +45,13 @@ export const makeHarnessService: (
     ): Effect.Effect<A, HarnessServiceError> =>
       nonAbortableStructural(semaphore, run);
     const read = <A>(run: () => A): Effect.Effect<A> =>
-      semaphore.withPermit(runSync(run)); // Avoid torn mutable-harness reads.
+      semaphore.withPermit(Effect.sync(run)); // Avoid torn mutable-harness reads.
 
-    return {
-      prompt: (...args: Args<"prompt">) =>
-        runStructural(harness.prompt.bind(harness, ...args)),
-      skill: (...args: Args<"skill">) =>
-        runStructural(harness.skill.bind(harness, ...args)),
-      promptFromTemplate: (...args: Args<"promptFromTemplate">) =>
-        runStructural(harness.promptFromTemplate.bind(harness, ...args)),
-      steer: (...args: Args<"steer">) =>
-        runPromise(harness.steer.bind(harness, ...args)),
-      followUp: (...args: Args<"followUp">) =>
-        runPromise(harness.followUp.bind(harness, ...args)),
-      nextTurn: (...args: Args<"nextTurn">) =>
-        runStructural(harness.nextTurn.bind(harness, ...args)),
-      abort: () => runPromise(harness.abort.bind(harness)),
-      compact: (instructions?: string) =>
-        mutate(harness.compact.bind(harness, instructions)),
-      navigateTree: (...args: Args<"navigateTree">) =>
-        mutate(harness.navigateTree.bind(harness, ...args)),
-      getModel: () => read(harness.getModel.bind(harness)),
-      setModel: (...args: Args<"setModel">) =>
-        mutate(harness.setModel.bind(harness, ...args)),
-      getThinkingLevel: () => read(harness.getThinkingLevel.bind(harness)),
-      setThinkingLevel: (...args: Args<"setThinkingLevel">) =>
-        mutate(harness.setThinkingLevel.bind(harness, ...args)),
-      getTools: () => read(harness.getTools.bind(harness)),
-      setTools: (...args: Args<"setTools">) =>
-        mutate(harness.setTools.bind(harness, ...args)),
-      getActiveTools: () => read(harness.getActiveTools.bind(harness)),
-      setActiveTools: (...args: Args<"setActiveTools">) =>
-        mutate(harness.setActiveTools.bind(harness, ...args)),
-      getSteeringMode: () => read(harness.getSteeringMode.bind(harness)),
-      setSteeringMode: (...args: Args<"setSteeringMode">) =>
-        mutate(harness.setSteeringMode.bind(harness, ...args)),
-      getFollowUpMode: () => read(harness.getFollowUpMode.bind(harness)),
-      setFollowUpMode: (...args: Args<"setFollowUpMode">) =>
-        mutate(harness.setFollowUpMode.bind(harness, ...args)),
-      getResources: () => read(harness.getResources.bind(harness)),
-      setResources: (...args: Args<"setResources">) =>
-        mutate(harness.setResources.bind(harness, ...args)),
-      getStreamOptions: () => read(harness.getStreamOptions.bind(harness)),
-      setStreamOptions: (...args: Args<"setStreamOptions">) =>
-        mutate(harness.setStreamOptions.bind(harness, ...args)),
-      switchModel: makeSwitchModelOperation(semaphore, harness),
-    } satisfies HarnessServiceShape;
+    return makeHarnessServiceMethods(harness, semaphore, {
+      mutate,
+      read,
+      run: runPromise,
+      runStructural,
+    });
   },
 );

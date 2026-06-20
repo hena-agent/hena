@@ -22,6 +22,7 @@ export interface PendingRequestStore<
   readonly options: PendingRequestRegistryOptions<
     Input,
     Request,
+    Value,
     Failure,
     Event
   >;
@@ -36,7 +37,7 @@ export const makePendingRequestStore = <
   Failure,
   Event,
 >(
-  options: PendingRequestRegistryOptions<Input, Request, Failure, Event>,
+  options: PendingRequestRegistryOptions<Input, Request, Value, Failure, Event>,
   events: PubSub.PubSub<Event>,
   lock: Semaphore.Semaphore,
 ): PendingRequestStore<Input, Request, Value, Failure, Event> => ({

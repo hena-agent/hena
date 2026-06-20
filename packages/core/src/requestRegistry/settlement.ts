@@ -49,32 +49,40 @@ export const settlePendingRequest = <
   >,
 ): Effect.Effect<void, NotFound | MakeSettlement> =>
   Effect.uninterruptibleMask((restore) =>
-    Effect.sync(() => {
-      const entry = input.store.pending.get(input.requestID);
-      if (entry !== undefined) {
-        input.store.pending.delete(input.requestID);
-        input.store.settling.set(input.requestID, entry);
-      }
-      return entry;
-    }).pipe(
-      Effect.flatMap(
-        (entry): Effect.Effect<void, NotFound | MakeSettlement, never> =>
-          entry === undefined
-            ? Effect.fail(input.notFound)
-            : restore(input.makeSettlement(entry.request)).pipe(
-                Effect.onError(() =>
-                  restoreSettlingOnError(input.store, input.requestID, entry),
+    input.store.lock
+      .withPermit(
+        Effect.sync(() => {
+          const entry = input.store.pending.get(input.requestID);
+          if (entry !== undefined) {
+            input.store.pending.delete(input.requestID);
+            input.store.settling.set(input.requestID, entry);
+          }
+          return entry;
+        }),
+      )
+      .pipe(
+        Effect.flatMap(
+          (entry): Effect.Effect<void, NotFound | MakeSettlement, never> =>
+            entry === undefined
+              ? Effect.fail(input.notFound)
+              : restore(input.makeSettlement(entry.request)).pipe(
+                  Effect.onError(() =>
+                    restoreSettlingOnError(input.store, input.requestID, entry),
+                  ),
+                  Effect.flatMap((settlement) =>
+                    finalizeSettlement({
+                      store: input.store,
+                      requestID: input.requestID,
+                      entry,
+                      settlement,
+                      complete: input.complete,
+                    }).pipe(
+                      Effect.flatMap((settled) =>
+                        settled ? Effect.void : Effect.fail(input.notFound),
+                      ),
+                    ),
+                  ),
                 ),
-                Effect.flatMap((settlement) =>
-                  finalizeSettlement({
-                    store: input.store,
-                    requestID: input.requestID,
-                    entry,
-                    settlement,
-                    complete: input.complete,
-                  }),
-                ),
-              ),
+        ),
       ),
-    ),
   );

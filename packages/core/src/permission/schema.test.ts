@@ -52,6 +52,19 @@ it("decodes permission request and event DTOs", () => {
   assert.strictEqual(denied.message, "Not allowed");
 });
 
+it("rejects non-JSON permission metadata", () => {
+  assert.throws(() =>
+    Schema.decodeUnknownSync(PermissionRequest)({
+      id: "per-1",
+      sessionID: "session-1",
+      permission: "external_directory",
+      patterns: ["/outside/*"],
+      always: ["/outside/*"],
+      metadata: { value: 1n },
+    }),
+  );
+});
+
 it("models permission service errors", () => {
   const denied = new PermissionDeniedError({
     requestID: "per-1",

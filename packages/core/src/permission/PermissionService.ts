@@ -1,4 +1,4 @@
-import { Context, Effect, Layer } from "effect";
+import { Context, Effect, Layer, Option } from "effect";
 
 import { makePendingRequestRegistry } from "../requestRegistry/makePendingRequestRegistry";
 import { makeGrant } from "./grant";
@@ -32,6 +32,10 @@ const makePermissionService = Effect.fnUntraced(function* () {
   >({
     idPrefix: "per",
     makeRequest,
+    resolveBeforeInstall: (input: PermissionAskInput) =>
+      isAlwaysGranted(state.alwaysGranted, input)
+        ? Option.some(undefined)
+        : Option.none(),
     snapshotRequest: snapshotPermissionRequest,
     askedEvent: (request: PermissionRequest): PermissionEvent => ({
       type: "permission.asked",
@@ -40,13 +44,7 @@ const makePermissionService = Effect.fnUntraced(function* () {
     rejectOnShutdown: (request: PermissionRequest) => denyRequest(request, ""),
   });
 
-  const ask = Effect.fnUntraced(function* (input: PermissionAskInput) {
-    if (isAlwaysGranted(state.alwaysGranted, input)) {
-      return;
-    }
-
-    return yield* registry.ask(input);
-  });
+  const ask = registry.ask;
 
   return {
     ask,

@@ -2,6 +2,7 @@ import { assert, it } from "@effect/vitest";
 import { Context, Effect, Path as EffectPath, FileSystem, Layer } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
+import { ToolInputError } from "./toolErrors";
 import { makeWriteAgentTool, WriteTool } from "./WriteTool";
 import { ToolWorkspace } from "./workspace";
 
@@ -140,6 +141,49 @@ it.effect("resolves relative write paths from the tool workspace", () => {
     Effect.provide(
       FileSystem.layerNoop({
         writeFileString: () => Effect.void,
+      }),
+    ),
+  );
+});
+
+it.effect("rejects oversized write content before writing", () => {
+  let wrote = false;
+  return Effect.gen(function* () {
+    const tool = yield* WriteTool;
+    const error = yield* tool
+      .execute({
+        filePath: "/workspace/large.txt",
+        content: "x".repeat(1024 * 1024 + 1),
+      })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
+    assert.strictEqual(error.message, "File is too large to write.");
+    assert.strictEqual(wrote, false);
+  }).pipe(
+    Effect.provide(WriteTool.Live),
+    Effect.provide(workspace),
+    Effect.provide(EffectPath.layer),
+    Effect.provide(
+      Layer.succeed(PathGuard)({
+        authorize: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          }),
+      }),
+    ),
+    Effect.provide(
+      FileSystem.layerNoop({
+        writeFileString: () =>
+          Effect.sync(() => {
+            wrote = true;
+          }),
       }),
     ),
   );

@@ -4,7 +4,7 @@ import { ToolRef } from "../toolRef";
 
 export const PermissionID = Schema.String.check(Schema.isStartsWith("per-"));
 
-export const PermissionMetadata = Schema.Record(Schema.String, Schema.Unknown);
+export const PermissionMetadata = Schema.Record(Schema.String, Schema.Json);
 
 export type PermissionMetadata = Schema.Schema.Type<typeof PermissionMetadata>;
 

@@ -19,6 +19,7 @@ import {
   type ToolShape,
 } from "./serviceAgentTool";
 import { resolvePath, ToolWorkspace } from "./workspace";
+import { writeContentBytes } from "./writeBounds";
 
 const WriteToolParameters = Schema.Struct({
   content: Schema.String.annotate({
@@ -37,8 +38,6 @@ export interface WriteToolDetails {
 }
 
 export type WriteToolShape = ToolShape<WriteToolParameters, WriteToolDetails>;
-
-const encoder = new TextEncoder();
 
 const makeWriteTool = Effect.fnUntraced(function* () {
   const fs = yield* FileSystem.FileSystem;
@@ -60,12 +59,13 @@ const makeWriteTool = Effect.fnUntraced(function* () {
         requested,
         tool === undefined ? undefined : { tool },
       );
+      const bytes = yield* writeContentBytes(params.content);
       yield* fs.writeFileString(authorization.canonicalPath, params.content);
       return {
         content: [{ type: "text", text: "Wrote file successfully." }],
         details: {
           path: authorization.canonicalPath,
-          bytes: encoder.encode(params.content).length,
+          bytes,
         },
       } satisfies PiAgent.AgentToolResult<WriteToolDetails>;
     }),

@@ -1,6 +1,9 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import * as PiNode from "@earendil-works/pi-agent-core/node";
 import { Context, Effect, Layer, Schema, type Scope } from "effect";
+
+import { makeLocalExecutionEnvProvider } from "./localExecutionEnvProvider";
+
+export { makeLocalExecutionEnvProvider };
 
 export interface ExecutionEnvRequest {
   readonly cwd: string;
@@ -15,10 +18,6 @@ export interface ExecutionEnvironment {
   readonly env: PiAgent.ExecutionEnv;
   readonly roots: ReadonlyArray<string>;
 }
-
-type ManagedExecutionEnvironment = ExecutionEnvironment & {
-  readonly cleanup: Effect.Effect<void>;
-};
 
 type ExecutionEnvAcquire = Effect.Effect<
   ExecutionEnvironment,
@@ -43,36 +42,6 @@ export const withPrimaryRoot = (
   roots: ReadonlyArray<string>,
 ): ReadonlyArray<string> =>
   roots.includes(cwd) ? [...roots] : [cwd, ...roots];
-
-const localEnvironment = (
-  request: ExecutionEnvRequest,
-): ManagedExecutionEnvironment => {
-  const env = new PiNode.NodeExecutionEnv({
-    cwd: request.cwd,
-    ...(request.shellEnv === undefined
-      ? {}
-      : { shellEnv: { ...request.shellEnv } }),
-    ...(request.shellPath === undefined
-      ? {}
-      : { shellPath: request.shellPath }),
-  });
-
-  return {
-    cwd: request.cwd,
-    env,
-    roots: [...request.roots],
-    // oxlint-disable-next-line typescript/promise-function-async
-    cleanup: Effect.promise(() => env.cleanup()).pipe(Effect.ignore),
-  };
-};
-
-export const makeLocalExecutionEnvProvider = (): ExecutionEnvProviderShape => ({
-  create: (request: ExecutionEnvRequest): ExecutionEnvAcquire =>
-    Effect.acquireRelease(
-      Effect.sync(() => localEnvironment(request)),
-      (environment) => environment.cleanup,
-    ),
-});
 
 export const makeCloudExecutionEnvProvider = (): ExecutionEnvProviderShape => ({
   create: (): Effect.Effect<ExecutionEnvironment, ExecutionEnvProviderError> =>

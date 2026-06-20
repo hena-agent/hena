@@ -591,3 +591,77 @@ it.effect("exposes runtime getters and setters", () =>
     });
   }),
 );
+
+it.effect("snapshots mutable harness getter DTOs", () =>
+  Effect.gen(function* () {
+    const tool: PiAgent.AgentTool = {
+      label: "Example",
+      name: "example",
+      description: "Example tool",
+      parameters: PiAi.Type.Object({}),
+      execute: async () => {
+        await Promise.resolve();
+        return { content: [{ type: "text", text: "ok" }], details: {} };
+      },
+    };
+    const harness = new FakeHarness();
+    harness.tools = [tool];
+    harness.activeTools = [tool];
+    harness.resources = {
+      promptTemplates: [{ name: "fix", content: "Fix {0}" }],
+      skills: [
+        {
+          name: "review",
+          description: "Review code",
+          content: "Review",
+          filePath: "/skills/review/SKILL.md",
+        },
+      ],
+    };
+    harness.streamOptions = {
+      headers: { "x-test": "one" },
+      metadata: { trace: "one" },
+    };
+    const service = yield* makeHarnessService(harness);
+
+    const tools = yield* service.getTools();
+    const [returnedTool] = tools;
+    assert.ok(returnedTool !== undefined);
+    returnedTool.name = "mutated";
+    tools.push({ ...tool, name: "extra" });
+
+    const activeTools = yield* service.getActiveTools();
+    const [activeTool] = activeTools;
+    assert.ok(activeTool !== undefined);
+    activeTool.label = "Mutated";
+
+    const resources = yield* service.getResources();
+    const [skill] = resources.skills ?? [];
+    assert.ok(skill !== undefined);
+    skill.name = "mutated";
+    resources.skills?.push({ ...skill, name: "extra" });
+    const [template] = resources.promptTemplates ?? [];
+    assert.ok(template !== undefined);
+    template.name = "mutated";
+
+    const streamOptions = yield* service.getStreamOptions();
+    Object.assign(streamOptions.headers ?? {}, { "x-test": "mutated" });
+    Object.assign(streamOptions.metadata ?? {}, { trace: "mutated" });
+
+    assert.strictEqual((yield* service.getTools()).length, 1);
+    assert.strictEqual((yield* service.getTools())[0]?.name, "example");
+    assert.strictEqual((yield* service.getActiveTools())[0]?.label, "Example");
+    assert.strictEqual(
+      (yield* service.getResources()).skills?.[0]?.name,
+      "review",
+    );
+    assert.strictEqual(
+      (yield* service.getResources()).promptTemplates?.[0]?.name,
+      "fix",
+    );
+    assert.deepStrictEqual(yield* service.getStreamOptions(), {
+      headers: { "x-test": "one" },
+      metadata: { trace: "one" },
+    });
+  }),
+);

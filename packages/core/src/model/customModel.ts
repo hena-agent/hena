@@ -7,6 +7,17 @@ const defaultCost: ModelTypes.HenaModel["cost"] = {
   cacheWrite: 0,
 };
 
+export const snapshotModel = (
+  model: ModelTypes.HenaModel,
+): ModelTypes.HenaModel => ({
+  ...model,
+  input: [...model.input],
+  cost: { ...model.cost },
+  ...(model.thinkingLevelMap === undefined
+    ? {}
+    : { thinkingLevelMap: { ...model.thinkingLevelMap } }),
+});
+
 export const toModel = (
   config: ModelTypes.CustomModelConfig,
 ): ModelTypes.HenaModel => ({
@@ -17,10 +28,10 @@ export const toModel = (
   baseUrl: config.baseUrl,
   reasoning: config.reasoning ?? false,
   input: [...(config.input ?? ["text"])],
-  cost: config.cost ?? defaultCost,
+  cost: { ...(config.cost ?? defaultCost) },
   contextWindow: config.contextWindow,
   maxTokens: config.maxTokens,
   ...(config.thinkingLevelMap === undefined
     ? {}
-    : { thinkingLevelMap: config.thinkingLevelMap }),
+    : { thinkingLevelMap: { ...config.thinkingLevelMap } }),
 });

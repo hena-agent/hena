@@ -37,7 +37,7 @@ export const finalizeSettlement = <
     Event,
     Settlement
   >,
-): Effect.Effect<void, never, never> => {
+): Effect.Effect<boolean, never, never> => {
   const { complete, entry, requestID, settlement, store } = input;
   return store.lock.withPermit(
     Effect.sync(() => {
@@ -51,6 +51,7 @@ export const finalizeSettlement = <
         owned
           ? publishSettlement(store, settlement).pipe(
               Effect.andThen(complete(entry, settlement)),
+              Effect.as(true),
               Effect.ensuring(
                 Effect.sync(() => {
                   store.settling.delete(requestID);
@@ -58,7 +59,7 @@ export const finalizeSettlement = <
                 }),
               ),
             )
-          : Effect.void,
+          : Effect.succeed(false),
       ),
     ),
   );

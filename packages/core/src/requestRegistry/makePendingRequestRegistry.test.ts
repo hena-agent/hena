@@ -227,6 +227,7 @@ it.effect("does not restore failed settlements after close", () =>
 
 it.effect("rejects settling waiters when the registry closes", () =>
   Effect.gen(function* () {
+    let committed = false;
     const setup = yield* Effect.scoped(
       Effect.gen(function* () {
         const registry = yield* makeRegistry();
@@ -247,6 +248,9 @@ it.effect("rejects settling waiters when the registry closes", () =>
                   type: "resolved",
                   requestID: request.id,
                 } satisfies Event,
+                commit: Effect.sync(() => {
+                  committed = true;
+                }),
               }),
             ),
           )
@@ -262,6 +266,7 @@ it.effect("rejects settling waiters when the registry closes", () =>
     yield* Fiber.join(setup.settlement).pipe(Effect.exit);
 
     assert.strictEqual(waiterError, "closed");
+    assert.strictEqual(committed, false);
   }),
 );
 

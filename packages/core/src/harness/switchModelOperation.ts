@@ -27,9 +27,11 @@ const setThinkingLevel = (
 const rollbackModel = (
   harness: HarnessLike,
   previousModel: HenaModel,
+  previousThinkingLevel: HenaThinkingLevel,
   originalError: HarnessServiceError,
 ): Effect.Effect<void, HarnessServiceError> =>
   setModel(harness, previousModel).pipe(
+    Effect.andThen(setThinkingLevel(harness, previousThinkingLevel)),
     Effect.matchEffect({
       onFailure: (rollbackError: HarnessServiceError) =>
         Effect.fail(
@@ -50,11 +52,14 @@ const applyModelThenThinkingLevel: (
 ) => Effect.Effect<void, HarnessServiceError> = Effect.fnUntraced(
   function* (harness, nextModel, thinkingLevel) {
     const previousModel = yield* runSync(harness.getModel.bind(harness));
+    const previousThinkingLevel = yield* runSync(
+      harness.getThinkingLevel.bind(harness),
+    );
     yield* setModel(harness, nextModel);
     yield* setThinkingLevel(harness, thinkingLevel).pipe(
       Effect.matchEffect({
         onFailure: (error: HarnessServiceError) =>
-          rollbackModel(harness, previousModel, error),
+          rollbackModel(harness, previousModel, previousThinkingLevel, error),
         onSuccess: () => Effect.void,
       }),
     );

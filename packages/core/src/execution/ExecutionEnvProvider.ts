@@ -11,11 +11,14 @@ export interface ExecutionEnvRequest {
 }
 
 export interface ExecutionEnvironment {
-  readonly cleanup: Effect.Effect<void>;
   readonly cwd: string;
   readonly env: PiAgent.ExecutionEnv;
   readonly roots: ReadonlyArray<string>;
 }
+
+type ManagedExecutionEnvironment = ExecutionEnvironment & {
+  readonly cleanup: Effect.Effect<void>;
+};
 
 type ExecutionEnvAcquire = Effect.Effect<
   ExecutionEnvironment,
@@ -43,7 +46,7 @@ export const withPrimaryRoot = (
 
 const localEnvironment = (
   request: ExecutionEnvRequest,
-): ExecutionEnvironment => {
+): ManagedExecutionEnvironment => {
   const env = new PiNode.NodeExecutionEnv({
     cwd: request.cwd,
     ...(request.shellEnv === undefined

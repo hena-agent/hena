@@ -11,7 +11,6 @@ export type FileSearchTargetKind = "directory" | "file";
 
 export type FileSearchAuthorize = (
   path: string,
-  kind: FileSearchTargetKind,
 ) => Effect.Effect<{ readonly canonicalPath: string }, ToolExecutionError>;
 
 export type FileSearchVisitDirectory = (

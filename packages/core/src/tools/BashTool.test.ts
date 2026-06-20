@@ -64,7 +64,6 @@ const makeEnvironmentWithResult = (
     cwd: "/workspace",
     roots: ["/workspace"],
     env,
-    cleanup: Effect.void,
   } satisfies ExecutionEnvironment);
 };
 

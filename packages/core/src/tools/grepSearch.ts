@@ -5,7 +5,8 @@ import type {
   FileSearchCandidate,
 } from "./fileSearchTypes";
 import { searchFiles } from "./files";
-import { formatMatches, grepFiles, makeIncludeMatcher } from "./grepOperations";
+import { formatMatches } from "./grepFormat";
+import { grepFiles, makeIncludeMatcher } from "./grepOperations";
 import { ToolInputError } from "./toolErrors";
 
 interface GrepSearchParameters {
@@ -61,13 +62,15 @@ export const executeGrepSearch = Effect.fnUntraced(function* (
     candidates.files,
     maxGrepMatches,
   );
-  const truncated = candidates.truncated || result.truncated;
+  const output = formatMatches(result.matches);
+  const truncated =
+    candidates.truncated || result.truncated || output.truncated;
 
   return {
     content: [
       {
         type: "text",
-        text: formatMatches(result.matches) || "No files found",
+        text: output.text || "No files found",
       },
     ],
     details: { matches: result.matches.length, truncated },

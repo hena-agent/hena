@@ -1,7 +1,8 @@
-import { Effect, FileSystem } from "effect";
+import { Effect, type FileSystem } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 
 import { compileGlobEffect } from "./globMatch";
+import { readLineWindow } from "./readLineWindow";
 import type { ToolInputError } from "./toolErrors";
 
 export interface GrepMatch {
@@ -16,8 +17,6 @@ export interface GrepResult {
 }
 
 type IncludeMatcher = (relativePath: string, basename: string) => boolean;
-
-const maxGrepFileBytes = FileSystem.MiB(1);
 
 export const makeIncludeMatcher: (
   include?: string,
@@ -39,13 +38,10 @@ export const grepFile: (
   limit: number,
 ) => Effect.Effect<GrepResult, PlatformError> = Effect.fnUntraced(
   function* (fs, pattern, file, limit) {
-    const info = yield* fs.stat(file);
-    if (info.size > maxGrepFileBytes) {
-      return { matches: [], truncated: true };
-    }
-    const text = yield* fs.readFileString(file);
+    const window = yield* readLineWindow(fs, file, 1, Number.MAX_SAFE_INTEGER);
     const matches: Array<GrepMatch> = [];
-    for (const [index, line] of text.split(/\r?\n/).entries()) {
+    for (const [index, line] of window.lines.entries()) {
+      pattern.lastIndex = 0;
       if (!pattern.test(line)) {
         continue;
       }
@@ -54,7 +50,7 @@ export const grepFile: (
       }
       matches.push({ path: file, line: index + 1, text: line });
     }
-    return { matches, truncated: false };
+    return { matches, truncated: window.truncated };
   },
 );
 
@@ -81,16 +77,3 @@ export const grepFiles = Effect.fnUntraced(function* (
   }
   return { matches, truncated } satisfies GrepResult;
 });
-
-export const formatMatches = (matches: ReadonlyArray<GrepMatch>): string => {
-  const output: Array<string> = [];
-  let current = "";
-  for (const match of matches) {
-    if (current !== match.path) {
-      current = match.path;
-      output.push(`${match.path}:`);
-    }
-    output.push(`  Line ${match.line}: ${match.text}`);
-  }
-  return output.join("\n");
-};

@@ -6,6 +6,7 @@ import {
   FileSystem,
   Layer,
   Option,
+  Stream,
 } from "effect";
 
 import { PathGuard } from "../path/PathGuard";
@@ -51,9 +52,11 @@ const makeLayer = GrepTool.Live.pipe(
   Layer.provideMerge(
     FileSystem.layerNoop({
       readDirectory: () => Effect.succeed(["src/a.ts", "README.md"]),
-      readFileString: (path) =>
-        Effect.succeed(
-          path.endsWith("a.ts") ? "needle\nneedle" : "needle docs",
+      stream: (path) =>
+        Stream.make(
+          new TextEncoder().encode(
+            path.endsWith("a.ts") ? "needle\nneedle" : "needle docs",
+          ),
         ),
       realPath: (path) => Effect.succeed(path),
       stat: (path) =>
@@ -86,7 +89,6 @@ it.effect(
       Effect.provide(
         FileSystem.layerNoop({
           readDirectory: () => Effect.succeed(["src/a.ts"]),
-          readFileString: () => Effect.die("large file should not be read"),
           realPath: (path) => Effect.succeed(path),
           stat: (path) =>
             Effect.succeed(
@@ -94,6 +96,8 @@ it.effect(
                 ? info("Directory")
                 : { ...info("File"), size: FileSystem.MiB(2) },
             ),
+          stream: () =>
+            Stream.make(new TextEncoder().encode("x".repeat(1024 * 1024 + 1))),
         }),
       ),
     ),

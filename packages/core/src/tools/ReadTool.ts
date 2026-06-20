@@ -60,11 +60,7 @@ const makeReadTool = Effect.fnUntraced(function* () {
         ...(tool === undefined ? {} : { tool }),
       });
       if (authorization.kind === "directory") {
-        return yield* readDirectory(
-          fs,
-          pathService,
-          authorization.canonicalPath,
-        );
+        return yield* readDirectory(fs, authorization.canonicalPath);
       }
       return yield* readFile(fs, authorization.canonicalPath, params);
     }),

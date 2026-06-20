@@ -34,7 +34,6 @@ const makeEnvironment = (cwd: string): ExecutionEnvironment => ({
   cwd,
   roots: [cwd],
   env: new PiNode.NodeExecutionEnv({ cwd }),
-  cleanup: Effect.void,
 });
 
 it.effect("assembles pi AgentHarnessOptions from core services", () =>

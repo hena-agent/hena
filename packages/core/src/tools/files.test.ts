@@ -199,18 +199,18 @@ it.effect("authorizes directories and matching file candidates", () =>
     const result = yield* searchFiles(fs, pathService, "/workspace", {
       limit: 10,
       matches: (candidate) => candidate.relativePath.endsWith(".ts"),
-      authorize: (path, kind) =>
+      authorize: (path) =>
         Effect.sync(() => {
-          authorized.push(`${kind}:${path}`);
+          authorized.push(path);
           return { canonicalPath: path };
         }),
     });
 
     assert.deepStrictEqual(result.files, ["/workspace/a.ts"]);
     assert.deepStrictEqual(authorized, [
-      "directory:/workspace",
-      "directory:/workspace/a.ts",
-      "directory:/workspace/README.md",
+      "/workspace",
+      "/workspace/a.ts",
+      "/workspace/README.md",
     ]);
   }).pipe(
     Effect.provide(
@@ -234,12 +234,11 @@ it.effect("authorizes symlinked directories before reading them", () => {
     const result = yield* searchFiles(fs, pathService, "/workspace", {
       limit: 10,
       matches: matchAll,
-      authorize: (path, kind) =>
+      authorize: (path) =>
         Effect.succeed({
-          canonicalPath:
-            kind === "directory" && path.startsWith("/workspace/link")
-              ? "/external"
-              : path,
+          canonicalPath: path.startsWith("/workspace/link")
+            ? "/external"
+            : path,
         }),
     });
 

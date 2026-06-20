@@ -12,12 +12,11 @@ import type { ToolExecutionError } from "./schema";
 const authorizedPath = Effect.fnUntraced(function* (
   options: FileSearchOptions,
   path: string,
-  kind: "directory" | "file",
 ) {
   if (options.authorize === undefined) {
     return path;
   }
-  const authorization = yield* options.authorize(path, kind);
+  const authorization = yield* options.authorize(path);
   return authorization.canonicalPath;
 });
 
@@ -34,11 +33,7 @@ export const searchFiles: (
 
     const visitDirectory: FileSearchVisitDirectory = Effect.fnUntraced(
       function* (directory, prefix) {
-        const canonicalDir = yield* authorizedPath(
-          options,
-          directory,
-          "directory",
-        );
+        const canonicalDir = yield* authorizedPath(options, directory);
         if (visitedDirectories.has(canonicalDir)) {
           return;
         }
@@ -61,7 +56,7 @@ export const searchFiles: (
         const fullPath = pathService.join(directory, entry);
         const relativePath =
           prefix === "" ? entry : pathService.join(prefix, entry);
-        const statPath = yield* authorizedPath(options, fullPath, "directory");
+        const statPath = yield* authorizedPath(options, fullPath);
         const info = yield* fs.stat(statPath);
 
         if (info.type === "File") {
@@ -79,7 +74,7 @@ export const searchFiles: (
 
     if (rootInfo.type === "File") {
       if (collector.matches(root, pathService.basename(root))) {
-        const canonicalPath = yield* authorizedPath(options, root, "file");
+        const canonicalPath = yield* authorizedPath(options, root);
         collector.add(canonicalPath);
       }
       return collector.result();

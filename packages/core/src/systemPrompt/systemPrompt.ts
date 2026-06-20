@@ -38,10 +38,13 @@ const environmentBlock = (input: SystemPromptInput, date: string): string =>
     `active tools: ${input.activeToolNames?.join(", ") ?? "none"}`,
   ]);
 
-const toolGuidance = compact([
-  "Tool guidance:",
-  "Use tool schemas as the source of truth. Ask a Question when human input is required.",
-]);
+const toolGuidance = (input: SystemPromptInput): string =>
+  compact([
+    "Tool guidance:",
+    input.activeToolNames?.includes("question")
+      ? "Use tool schemas as the source of truth. Ask a Question when human input is required."
+      : "Use tool schemas as the source of truth.",
+  ]);
 
 const projectInstructionsBlock = (
   instructions: ReadonlyArray<ProjectInstruction>,
@@ -62,7 +65,7 @@ export const buildSystemPrompt: <TApi extends PiAi.Api>(
   const sections = [
     input.baseInstructions ?? DEFAULT_SYSTEM_PROMPT,
     environmentBlock(input, date),
-    toolGuidance,
+    toolGuidance(input),
   ];
 
   if (skills !== "") {

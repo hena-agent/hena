@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { Effect, Path as EffectPath, FileSystem, Option, Stream } from "effect";
+import { Effect, FileSystem, Option, Stream } from "effect";
 
 import { readDirectory, readFile } from "./readOperations";
 
@@ -65,6 +65,17 @@ it.effect("uses default file line range", () =>
   }).pipe(Effect.provide(fileLayer("a\nb"))),
 );
 
+it.effect("trims carriage returns from CRLF lines", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readFile(fs, "/file.txt", { filePath: "/file.txt" });
+
+    assert.deepStrictEqual(result.content, [
+      { type: "text", text: "1: a\n2: b" },
+    ]);
+  }).pipe(Effect.provide(fileLayer("a\r\nb"))),
+);
+
 it.effect("streams to requested offsets beyond the first MiB", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -93,6 +104,34 @@ it.effect("marks oversized selected output as truncated", () =>
   }).pipe(Effect.provide(fileLayer("x".repeat(Number(FileSystem.MiB(1)) + 1)))),
 );
 
+it.effect("stops streaming long lines after the selected byte cap", () => {
+  let pulls = 0;
+  const chunk = new TextEncoder().encode("x".repeat(600_000));
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readFile(fs, "/large.txt", {
+      filePath: "/large.txt",
+    });
+
+    assert.strictEqual(result.details.truncated, true);
+    assert.strictEqual(pulls, 2);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        stat: () => Effect.succeed(info("File")),
+        stream: () =>
+          Stream.make(chunk, chunk, chunk).pipe(
+            Stream.tap(() =>
+              Effect.sync(() => {
+                pulls += 1;
+              }),
+            ),
+          ),
+      }),
+    ),
+  );
+});
+
 it.effect(
   "stops appending lines after selected output reaches the byte cap",
   () =>
@@ -118,8 +157,7 @@ it.effect(
 it.effect("lists directory entries without probing children", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
-    const pathService = yield* EffectPath.Path;
-    const result = yield* readDirectory(fs, pathService, "/workspace");
+    const result = yield* readDirectory(fs, "/workspace");
 
     assert.deepStrictEqual(result.content, [
       { type: "text", text: "file.txt\nsrc" },
@@ -134,6 +172,25 @@ it.effect("lists directory entries without probing children", () =>
           ),
       }),
     ),
-    Effect.provide(EffectPath.layer),
+  ),
+);
+
+it.effect("truncates oversized directory listings", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* readDirectory(fs, "/workspace");
+    const [content] = result.content;
+    if (content?.type !== "text") {
+      throw new Error("expected text content");
+    }
+
+    assert.strictEqual(content.text.length, 1024 * 1024);
+    assert.strictEqual(result.details.truncated, true);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readDirectory: () => Effect.succeed(["x".repeat(1024 * 1024 + 1)]),
+      }),
+    ),
   ),
 );

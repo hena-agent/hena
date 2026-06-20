@@ -26,7 +26,7 @@ it.effect(
         date: "2026-06-19",
         model,
         thinkingLevel: "minimal",
-        activeToolNames: ["Read", "Bash"],
+        activeToolNames: ["read", "bash", "question"],
         skills: [skill],
         projectInstructions: [
           { path: "/workspace/AGENTS.md", content: "Use bun." },
@@ -40,7 +40,8 @@ it.effect(
       assert.ok(prompt.includes("date: 2026-06-19"));
       assert.ok(prompt.includes("active model: openai/gpt-4o-mini"));
       assert.ok(prompt.includes("thinking level: minimal"));
-      assert.ok(prompt.includes("active tools: Read, Bash"));
+      assert.ok(prompt.includes("active tools: read, bash, question"));
+      assert.ok(prompt.includes("Ask a Question"));
       assert.ok(prompt.includes("<available_skills>"));
       assert.ok(prompt.includes("<name>review</name>"));
       assert.ok(prompt.includes("/workspace/AGENTS.md"));
@@ -63,6 +64,7 @@ it.effect("uses the default base prompt and Effect clock date", () =>
     assert.ok(prompt.includes(DEFAULT_SYSTEM_PROMPT));
     assert.ok(prompt.includes("date: 1970-01-01T00:00:00.000Z"));
     assert.ok(prompt.includes("active tools: none"));
+    assert.ok(!prompt.includes("Ask a Question"));
     assert.ok(!prompt.includes("<available_skills>"));
     assert.ok(!prompt.includes("Project instructions"));
   }),

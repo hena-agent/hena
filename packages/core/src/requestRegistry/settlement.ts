@@ -1,7 +1,7 @@
-import { Deferred, Effect } from "effect";
+import { Effect } from "effect";
 
+import { restoreSettlingOnError } from "./restoreSettlingOnError";
 import { type PendingRequestStore, publishSettlement } from "./store";
-import { takePending } from "./takePending";
 import type { PendingRequestEntry, PendingRequestSettlement } from "./types";
 
 interface SettlePendingRequestInput<
@@ -17,7 +17,7 @@ interface SettlePendingRequestInput<
   readonly complete: (
     entry: PendingRequestEntry<Request, Value, Failure>,
     settlement: Settlement,
-  ) => Effect.Effect<unknown>;
+  ) => Effect.Effect<unknown, never, never>;
   readonly makeSettlement: (
     request: Request,
   ) => Effect.Effect<Settlement, MakeSettlement>;
@@ -48,50 +48,41 @@ export const settlePendingRequest = <
   >,
 ): Effect.Effect<void, NotFound | MakeSettlement> =>
   Effect.uninterruptibleMask((restore) =>
-    takePending(input.store, input.requestID).pipe(
-      Effect.flatMap((entry) =>
-        entry === undefined
-          ? Effect.fail(input.notFound)
-          : Effect.sync(() => {
-              input.store.settling.set(input.requestID, entry);
-              return entry;
-            }),
-      ),
-      Effect.flatMap((entry) =>
-        restore(input.makeSettlement(entry.request)).pipe(
-          Effect.onError(() =>
-            Effect.sync(() => {
-              input.store.settling.delete(input.requestID);
-              if (input.store.cancelled.delete(input.requestID)) {
-                return undefined;
-              }
-              if (!input.store.closed) {
-                input.store.pending.set(input.requestID, entry);
-                return undefined;
-              }
-              return input.store.options.rejectOnShutdown(entry.request)
-                .failure;
-            }).pipe(
-              Effect.flatMap((failure) =>
-                failure === undefined
-                  ? Effect.void
-                  : Deferred.fail(entry.deferred, failure).pipe(Effect.asVoid),
+    Effect.sync(() => {
+      const entry = input.store.pending.get(input.requestID);
+      if (entry !== undefined) {
+        input.store.pending.delete(input.requestID);
+        input.store.settling.set(input.requestID, entry);
+      }
+      return entry;
+    }).pipe(
+      Effect.flatMap(
+        (entry): Effect.Effect<void, NotFound | MakeSettlement, never> =>
+          entry === undefined
+            ? Effect.fail(input.notFound)
+            : restore(input.makeSettlement(entry.request)).pipe(
+                Effect.onError(() =>
+                  restoreSettlingOnError(input.store, input.requestID, entry),
+                ),
+                Effect.flatMap((settlement) =>
+                  Effect.sync(() => {
+                    if (input.store.settling.get(input.requestID) !== entry) {
+                      return false;
+                    }
+                    input.store.cancelled.delete(input.requestID);
+                    input.store.settling.delete(input.requestID);
+                    return true;
+                  }).pipe(
+                    Effect.flatMap((owned) =>
+                      owned
+                        ? publishSettlement(input.store, settlement).pipe(
+                            Effect.ensuring(input.complete(entry, settlement)),
+                          )
+                        : Effect.void,
+                    ),
+                  ),
+                ),
               ),
-            ),
-          ),
-          Effect.flatMap((settlement) =>
-            publishSettlement(input.store, settlement).pipe(
-              Effect.andThen(
-                Effect.sync(() => {
-                  input.store.cancelled.delete(input.requestID);
-                  input.store.settling.delete(input.requestID);
-                }),
-              ),
-              Effect.andThen(input.complete(entry, settlement)),
-              Effect.asVoid,
-            ),
-          ),
-        ),
       ),
     ),
   );

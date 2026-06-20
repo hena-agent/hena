@@ -20,9 +20,9 @@ it.effect(
         rootKind: "directory",
       });
 
-      yield* authorize("/workspace/a.ts", "file");
-      yield* authorize("/workspace/link", "directory");
-      yield* authorize("/external/secret.ts", "file");
+      yield* authorize("/workspace/a.ts");
+      yield* authorize("/workspace/link");
+      yield* authorize("/external/secret.ts");
 
       assert.deepStrictEqual(authorized, ["directory:/external"]);
     }).pipe(
@@ -72,7 +72,7 @@ it.effect("passes tool refs when authorizing file escapes", () => {
       tool: { callID: "call-search" },
     });
 
-    yield* authorize("/workspace/link-file", "file");
+    yield* authorize("/workspace/link-file");
 
     assert.deepStrictEqual(authorized, [
       "file:/external/secret.ts:call-search",
@@ -122,8 +122,8 @@ it.effect("keeps authorized file roots scoped to that file", () => {
       rootKind: "file",
     });
 
-    yield* authorize("/external/secret.ts", "file");
-    yield* authorize("/external/other.ts", "file");
+    yield* authorize("/external/secret.ts");
+    yield* authorize("/external/other.ts");
 
     assert.deepStrictEqual(authorized, ["file:/external/other.ts"]);
   }).pipe(

@@ -1,29 +1,13 @@
 import { assert, it } from "@effect/vitest";
-import { Effect, FileSystem, Option } from "effect";
+import { Effect, FileSystem, Stream } from "effect";
 
-import {
-  formatMatches,
-  grepFile,
-  grepFiles,
-  makeIncludeMatcher,
-} from "./grepOperations";
+import { formatMatches } from "./grepFormat";
+import { grepFile, grepFiles, makeIncludeMatcher } from "./grepOperations";
 
-const fileInfo = (size = FileSystem.Size(0)): FileSystem.File.Info => ({
-  type: "File",
-  mtime: Option.none(),
-  atime: Option.none(),
-  birthtime: Option.none(),
-  dev: 0,
-  ino: Option.none(),
-  mode: 0,
-  nlink: Option.none(),
-  uid: Option.none(),
-  gid: Option.none(),
-  rdev: Option.none(),
-  size,
-  blksize: Option.none(),
-  blocks: Option.none(),
-});
+const fileLayer = (read: (path: string) => string) =>
+  FileSystem.layerNoop({
+    stream: (path) => Stream.make(new TextEncoder().encode(read(path))),
+  });
 
 it.effect("matches include globs against relative paths and basenames", () =>
   Effect.gen(function* () {
@@ -55,14 +39,7 @@ it.effect(
         matches: [{ path: "/workspace/a.ts", line: 1, text: "needle" }],
         truncated: true,
       });
-    }).pipe(
-      Effect.provide(
-        FileSystem.layerNoop({
-          readFileString: () => Effect.succeed("needle"),
-          stat: () => Effect.succeed(fileInfo()),
-        }),
-      ),
-    ),
+    }).pipe(Effect.provide(fileLayer(() => "needle"))),
 );
 
 it.effect("propagates per-file grep truncation", () =>
@@ -74,14 +51,7 @@ it.effect("propagates per-file grep truncation", () =>
       matches: [{ path: "/workspace/a.ts", line: 1, text: "needle" }],
       truncated: true,
     });
-  }).pipe(
-    Effect.provide(
-      FileSystem.layerNoop({
-        readFileString: () => Effect.succeed("needle\nneedle"),
-        stat: () => Effect.succeed(fileInfo()),
-      }),
-    ),
-  ),
+  }).pipe(Effect.provide(fileLayer(() => "needle\nneedle"))),
 );
 
 it.effect("greps matching lines from a file", () =>
@@ -93,14 +63,7 @@ it.effect("greps matching lines from a file", () =>
       { path: "/workspace/a.ts", line: 2, text: "needle" },
     ]);
     assert.strictEqual(result.truncated, false);
-  }).pipe(
-    Effect.provide(
-      FileSystem.layerNoop({
-        readFileString: () => Effect.succeed("hay\nneedle"),
-        stat: () => Effect.succeed(fileInfo()),
-      }),
-    ),
-  ),
+  }).pipe(Effect.provide(fileLayer(() => "hay\nneedle"))),
 );
 
 it.effect("reports truncated grep results", () =>
@@ -112,17 +75,10 @@ it.effect("reports truncated grep results", () =>
       { path: "/workspace/a.ts", line: 1, text: "needle" },
     ]);
     assert.strictEqual(result.truncated, true);
-  }).pipe(
-    Effect.provide(
-      FileSystem.layerNoop({
-        readFileString: () => Effect.succeed("needle\nneedle"),
-        stat: () => Effect.succeed(fileInfo()),
-      }),
-    ),
-  ),
+  }).pipe(Effect.provide(fileLayer(() => "needle\nneedle"))),
 );
 
-it.effect("continues after skipping oversized grep candidates", () =>
+it.effect("continues after truncated grep candidates", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const result = yield* grepFiles(
@@ -138,16 +94,9 @@ it.effect("continues after skipping oversized grep candidates", () =>
     });
   }).pipe(
     Effect.provide(
-      FileSystem.layerNoop({
-        readFileString: (path) =>
-          Effect.succeed(path.endsWith("a.ts") ? "needle" : ""),
-        stat: (path) =>
-          Effect.succeed(
-            path.endsWith("large.log")
-              ? fileInfo(FileSystem.MiB(2))
-              : fileInfo(),
-          ),
-      }),
+      fileLayer((path) =>
+        path.endsWith("a.ts") ? "needle" : "x".repeat(1024 * 1024 + 1),
+      ),
     ),
   ),
 );
@@ -157,7 +106,17 @@ it("formats grouped grep matches", () => {
     formatMatches([
       { path: "/workspace/a.ts", line: 1, text: "needle" },
       { path: "/workspace/a.ts", line: 2, text: "needle" },
-    ]),
-    "/workspace/a.ts:\n  Line 1: needle\n  Line 2: needle",
+      { path: "/workspace/b.ts", line: 1, text: "other" },
+    ]).text,
+    "/workspace/a.ts:\n  Line 1: needle\n  Line 2: needle\n/workspace/b.ts:\n  Line 1: other",
   );
+});
+
+it("truncates formatted grep output by bytes", () => {
+  const result = formatMatches([
+    { path: "/workspace/a.ts", line: 1, text: "x".repeat(1024 * 1024) },
+  ]);
+
+  assert.strictEqual(result.text.length, 1024 * 1024);
+  assert.strictEqual(result.truncated, true);
 });

@@ -231,9 +231,13 @@ class FailingHarness extends FakeHarness {
 }
 
 class FailingThinkingHarness extends FakeHarness {
-  override async setThinkingLevel(): Promise<void> {
+  override async setThinkingLevel(level: PiAgent.ThinkingLevel): Promise<void> {
     await Promise.resolve();
-    this.calls.push("setThinking:fail");
+    this.calls.push(`setThinking:${level}`);
+    if (level === "minimal") {
+      this.thinkingLevel = level;
+      return;
+    }
     throw new PiAgent.AgentHarnessError("invalid_argument", "bad thinking");
   }
 }
@@ -443,10 +447,12 @@ it.effect("rolls back model switches when thinking level update fails", () =>
     assert.ok(error instanceof HarnessServiceError);
     assert.strictEqual(error.code, "invalid_argument");
     assert.strictEqual(harness.model, modelOne);
+    assert.strictEqual(harness.thinkingLevel, "minimal");
     assert.deepStrictEqual(harness.calls, [
       "setModel:two",
-      "setThinking:fail",
+      "setThinking:off",
       "setModel:one",
+      "setThinking:minimal",
     ]);
   }),
 );
@@ -464,7 +470,7 @@ it.effect("surfaces rollback failures during model switches", () =>
     assert.strictEqual(harness.model, modelTwo);
     assert.deepStrictEqual(harness.calls, [
       "setModel:two",
-      "setThinking:fail",
+      "setThinking:off",
       "setModel:one",
     ]);
   }),

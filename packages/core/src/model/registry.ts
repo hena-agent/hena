@@ -1,37 +1,12 @@
 import * as PiAi from "@earendil-works/pi-ai";
 import { Effect } from "effect";
 
-import { ModelNotFoundError } from "./errors";
+import { toModel } from "./customModel";
+import { DefaultModelNotFoundError, ModelNotFoundError } from "./errors";
 import type * as ModelTypes from "./types";
 
-export { ModelNotFoundError } from "./errors";
+export { DefaultModelNotFoundError, ModelNotFoundError } from "./errors";
 export type { CustomModelConfig } from "./types";
-
-const defaultCost: ModelTypes.HenaModel["cost"] = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-};
-
-const toModel = (
-  config: ModelTypes.CustomModelConfig,
-): ModelTypes.HenaModel => ({
-  id: config.id,
-  name: config.name ?? config.id,
-  api: config.api ?? "openai-completions",
-  provider: config.provider,
-  baseUrl: config.baseUrl,
-  reasoning: config.reasoning ?? false,
-  input: [...(config.input ?? ["text"])],
-  cost: config.cost ?? defaultCost,
-  contextWindow: config.contextWindow ?? 0,
-  maxTokens: config.maxTokens ?? 0,
-  ...(config.thinkingLevelMap === undefined
-    ? {}
-    : { thinkingLevelMap: config.thinkingLevelMap }),
-  ...(config.headers === undefined ? {} : { headers: { ...config.headers } }),
-});
 
 const accepts = (
   config: ModelTypes.ModelRegistryConfig,
@@ -72,6 +47,17 @@ const requireModel = (
 ): Effect.Effect<ModelTypes.HenaModel, ModelNotFoundError> =>
   model === undefined ? Effect.fail(missingModel(ref)) : Effect.succeed(model);
 
+const requireDefaultModel = (
+  model: ModelTypes.HenaModel | undefined,
+): Effect.Effect<ModelTypes.HenaModel, DefaultModelNotFoundError> =>
+  model === undefined
+    ? Effect.fail(
+        new DefaultModelNotFoundError({
+          message: "No default model configured and no models are available",
+        }),
+      )
+    : Effect.succeed(model);
+
 export const makeModelRegistry = (
   config: ModelTypes.ModelRegistryConfig = {},
 ): Effect.Effect<ModelTypes.ModelRegistryShape> =>
@@ -94,7 +80,7 @@ export const makeModelRegistry = (
         if (ref !== undefined) {
           return requireModel(findModel(models, ref), ref);
         }
-        return requireModel(models[0], { provider: "default", modelId: "" });
+        return requireDefaultModel(models[0]);
       },
     } satisfies ModelTypes.ModelRegistryShape;
   });

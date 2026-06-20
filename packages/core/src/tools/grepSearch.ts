@@ -6,8 +6,9 @@ import type {
 } from "./fileSearchTypes";
 import { searchFiles } from "./files";
 import { formatMatches, grepFiles, makeIncludeMatcher } from "./grepOperations";
+import { ToolInputError } from "./toolErrors";
 
-export interface GrepSearchParameters {
+interface GrepSearchParameters {
   readonly include?: string | undefined;
   readonly pattern: string;
 }
@@ -28,11 +29,22 @@ export interface GrepSearchInput {
 const maxGrepFiles = 10000;
 const maxGrepMatches = 1000;
 
+const compilePattern = (
+  pattern: string,
+): Effect.Effect<RegExp, ToolInputError> =>
+  Effect.try({
+    try: () => new RegExp(pattern),
+    catch: (error: unknown) =>
+      new ToolInputError({
+        message: error instanceof Error ? error.message : "Invalid regex",
+      }),
+  });
+
 export const executeGrepSearch = Effect.fnUntraced(function* (
   input: GrepSearchInput,
 ) {
   const { authorize, fs, params, pathService, root } = input;
-  const pattern = new RegExp(params.pattern);
+  const pattern = yield* compilePattern(params.pattern);
   const matchesInclude = makeIncludeMatcher(params.include);
   const candidates = yield* searchFiles(fs, pathService, root, {
     authorize,

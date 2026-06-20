@@ -17,7 +17,7 @@ import {
 } from "./serviceAgentTool";
 import { ToolWorkspace } from "./workspace";
 
-export const GlobToolParameters = Schema.Struct({
+const GlobToolParameters = Schema.Struct({
   pattern: Schema.String.annotate({
     description: "The glob pattern to match files against",
   }),
@@ -27,7 +27,7 @@ export const GlobToolParameters = Schema.Struct({
   }),
 });
 
-export type GlobToolParameters = (typeof GlobToolParameters)["Type"];
+type GlobToolParameters = (typeof GlobToolParameters)["Type"];
 
 export interface GlobToolDetails {
   readonly count: number;

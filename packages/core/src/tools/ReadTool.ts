@@ -49,12 +49,13 @@ const makeReadTool = Effect.fnUntraced(function* () {
       context?: ToolInvocationContext<ReadToolDetails>,
     ) {
       const tool = toolReferenceFromContext(context);
-      const info = yield* fs.stat(params.filePath);
-      const authorization = yield* pathGuard.authorize(params.filePath, {
-        kind: info.type === "Directory" ? "directory" : "file",
-        ...(tool === undefined ? {} : { tool }),
-      });
-      if (info.type === "Directory") {
+      const authorization = yield* pathGuard.authorizeExistingPath(
+        params.filePath,
+        {
+          ...(tool === undefined ? {} : { tool }),
+        },
+      );
+      if (authorization.kind === "directory") {
         return yield* readDirectory(
           fs,
           pathService,

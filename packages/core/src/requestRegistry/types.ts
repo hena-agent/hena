@@ -5,9 +5,10 @@ export interface PendingRequestEntry<Request, Value, Failure> {
   readonly request: Request;
 }
 
-export type PendingRequestPublish<Event> = (
-  event: Event,
-) => Effect.Effect<void>;
+export type PendingRequestMap<Request, Value, Failure> = Map<
+  string,
+  PendingRequestEntry<Request, Value, Failure>
+>;
 
 export interface PendingRequestSettlement<Event> {
   readonly event: Event;

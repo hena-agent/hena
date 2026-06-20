@@ -136,3 +136,58 @@ it.effect(
       ),
     ),
 );
+
+it.effect("detects kind inside the existing-path authorization boundary", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const authorization = yield* guard.authorizeExistingPath("/workspace/src");
+
+    assert.deepStrictEqual(authorization, {
+      canonicalPath: "/workspace/src",
+      allowedBy: "workspace",
+      kind: "directory",
+    });
+  }).pipe(
+    Effect.provide(
+      PathGuard.layer({
+        sessionID: "session-1",
+        roots: ["/workspace"],
+        canonicalize,
+        getTargetKind: () => Effect.succeed("directory"),
+      }).pipe(
+        Layer.provideMerge(PermissionService.Live),
+        Layer.provideMerge(EffectPath.layer),
+      ),
+    ),
+  ),
+);
+
+it.effect(
+  "authorizes file creation by canonicalizing the parent directory",
+  () =>
+    Effect.gen(function* () {
+      const guard = yield* PathGuard;
+      const authorization = yield* guard.authorizeCreateFile(
+        "/workspace/link/new.txt",
+      );
+
+      assert.deepStrictEqual(authorization, {
+        canonicalPath: "/workspace/real/new.txt",
+        allowedBy: "workspace",
+      });
+    }).pipe(
+      Effect.provide(
+        PathGuard.layer({
+          sessionID: "session-1",
+          roots: ["/workspace"],
+          canonicalize: (path) =>
+            Effect.succeed(
+              path === "/workspace/link" ? "/workspace/real" : path,
+            ),
+        }).pipe(
+          Layer.provideMerge(PermissionService.Live),
+          Layer.provideMerge(EffectPath.layer),
+        ),
+      ),
+    ),
+);

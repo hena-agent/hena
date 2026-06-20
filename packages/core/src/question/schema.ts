@@ -1,6 +1,6 @@
 import { Effect, Schema } from "effect";
 
-import { ToolRef, type ToolRef as ToolRefType } from "../toolRef";
+import { ToolRef } from "../toolRef";
 
 export const QuestionID = Schema.String.check(Schema.isStartsWith("que-"));
 
@@ -11,14 +11,12 @@ export const Option = Schema.Struct({
 
 export type Option = Schema.Schema.Type<typeof Option>;
 
-export const Prompt = Schema.Struct({
+const Prompt = Schema.Struct({
   question: Schema.String,
   header: Schema.String,
   options: Schema.Array(Option),
   multiple: Schema.optional(Schema.Boolean),
 });
-
-export type Prompt = Schema.Schema.Type<typeof Prompt>;
 
 export const Info = Schema.Struct({
   ...Prompt.fields,
@@ -27,15 +25,11 @@ export const Info = Schema.Struct({
 
 export type Info = Schema.Schema.Type<typeof Info>;
 
-export const Tool: typeof ToolRef = ToolRef;
-
-export type Tool = ToolRefType;
-
 export const Request = Schema.Struct({
   id: QuestionID,
   sessionID: Schema.String,
   questions: Schema.Array(Info),
-  tool: Schema.optional(Tool),
+  tool: Schema.optional(ToolRef),
 });
 
 export type Request = Schema.Schema.Type<typeof Request>;
@@ -67,14 +61,10 @@ export type QuestionRepliedEvent = Schema.Schema.Type<
   typeof QuestionRepliedEvent
 >;
 
-export const QuestionRejectedEvent = Schema.Struct({
+const QuestionRejectedEvent = Schema.Struct({
   type: Schema.Literal("question.rejected"),
   requestID: QuestionID,
 });
-
-export type QuestionRejectedEvent = Schema.Schema.Type<
-  typeof QuestionRejectedEvent
->;
 
 export const QuestionEvent = Schema.Union([
   QuestionAskedEvent,

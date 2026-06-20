@@ -1,7 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { QuestionID, Request, Tool } from "./schema";
+import { ToolRef } from "../toolRef";
+import { QuestionID, Request } from "./schema";
 
 it("accepts only que-prefixed question ids", () => {
   assert.strictEqual(Schema.decodeUnknownSync(QuestionID)("que-1"), "que-1");
@@ -9,7 +10,7 @@ it("accepts only que-prefixed question ids", () => {
 });
 
 it("preserves question tool message and call ids", () => {
-  const tool = Schema.decodeUnknownSync(Tool)({
+  const tool = Schema.decodeUnknownSync(ToolRef)({
     messageID: "msg-1",
     callID: "call-1",
   });

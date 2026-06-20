@@ -28,7 +28,7 @@ it.effect(
       const calls: Array<string> = [];
       const runtime: HarnessModelRuntime = {
         getThinkingLevel: () => Effect.succeed("xhigh"),
-        setModelAndThinkingLevel: (model, level) =>
+        applyModelThenThinkingLevel: (model, level) =>
           Effect.sync(() => {
             calls.push(`model:${model.id}`);
             calls.push(`thinking:${level}`);
@@ -47,7 +47,7 @@ it.effect("uses an explicit requested thinking level during model switch", () =>
     const levels: Array<string> = [];
     const runtime: HarnessModelRuntime = {
       getThinkingLevel: () => Effect.succeed("minimal"),
-      setModelAndThinkingLevel: (_model, level) =>
+      applyModelThenThinkingLevel: (_model, level) =>
         Effect.sync(() => {
           levels.push(level);
         }),

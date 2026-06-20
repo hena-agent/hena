@@ -1,22 +1,19 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { assert, it } from "@effect/vitest";
-import { Effect, Fiber, Schema, Stream } from "effect";
+import { Effect, Fiber, Stream } from "effect";
 
-import { HarnessEventDTO } from "./eventSchema";
+import { toHarnessEventEnvelope } from "./eventSchema";
 import { makeHarnessEventBridge } from "./events";
 
-it("encodes harness events as stable versioned DTOs", () => {
+it("wraps raw harness events in a versioned envelope", () => {
   const event = { type: "agent_start" } satisfies PiAgent.AgentHarnessEvent;
-  const decoded = Schema.decodeUnknownSync(HarnessEventDTO)({
-    version: 1,
-    event,
-  });
+  const envelope = toHarnessEventEnvelope(event);
 
-  assert.strictEqual(decoded.version, 1);
-  assert.deepStrictEqual(decoded.event, event);
+  assert.strictEqual(envelope.version, 1);
+  assert.deepStrictEqual(envelope.event, event);
 });
 
-it.effect("streams versioned harness event DTOs", () =>
+it.effect("streams versioned raw harness event envelopes", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const bridge = yield* makeHarnessEventBridge();

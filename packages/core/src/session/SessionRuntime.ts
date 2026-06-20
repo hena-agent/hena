@@ -8,7 +8,6 @@ export { SessionRuntimeLoader } from "./SessionRuntimeLoader";
 export { SessionRuntime } from "./SessionRuntimeService";
 export type {
   AgentHarnessFactoryShape,
-  HarnessEventSource,
   SessionRuntimeConfig,
   SessionRuntimeHarness,
   SessionRuntimeLoaderShape,
@@ -19,7 +18,7 @@ type BuiltSessionRuntimeLayer = ReturnType<typeof makeSessionRuntimeLayer>;
 
 type LookupSessionRuntimeLayer = Layer.Layer<
   Layer.Success<BuiltSessionRuntimeLayer>,
-  Layer.Error<BuiltSessionRuntimeLayer>,
+  unknown,
   Layer.Services<BuiltSessionRuntimeLayer> | SessionRuntimeLoader
 >;
 

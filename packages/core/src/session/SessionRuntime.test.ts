@@ -105,7 +105,6 @@ const makeLayers = (state: TestState) =>
           state.loads++;
           const session = yield* makeSession(sessionID);
           return {
-            sessionID,
             cwd: "/repo",
             roots: ["/repo"],
             session,

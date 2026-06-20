@@ -1,74 +1,86 @@
 import { Context, Effect, Path as EffectPath, Layer } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
 import { PermissionService } from "../permission/PermissionService";
+import { authorizeCanonicalPath } from "./authorization";
 import type {
-  PermissionDeniedError,
-  PermissionTool,
-} from "../permission/schema";
-import { externalDirectoryPattern, isInsideRoot } from "./helpers";
+  PathGuardAuthorizeOptions,
+  PathGuardConfig,
+  PathGuardExistingPathAuthorization,
+  PathGuardShape,
+  PathGuardTargetKind,
+} from "./PathGuardTypes";
 
-export type PathGuardTargetKind = "file" | "directory";
+export type * from "./PathGuardTypes";
 
-export interface PathGuardAuthorizeOptions {
-  readonly kind?: PathGuardTargetKind;
-  readonly tool?: PermissionTool | undefined;
-}
+const defaultTargetKind = (): Effect.Effect<PathGuardTargetKind> =>
+  Effect.succeed("file");
 
-export interface PathGuardAuthorization {
-  readonly allowedBy: "workspace" | "permission";
-  readonly canonicalPath: string;
-}
-
-export interface PathGuardConfig {
-  readonly canonicalize: (path: string) => Effect.Effect<string>;
-  readonly roots: ReadonlyArray<string>;
-  readonly sessionID: string;
-}
-
-export interface PathGuardShape {
-  readonly authorize: (
-    path: string,
-    options?: PathGuardAuthorizeOptions,
-  ) => Effect.Effect<PathGuardAuthorization, PermissionDeniedError>;
-}
+const withTool = (
+  kind: PathGuardTargetKind,
+  options?: Omit<PathGuardAuthorizeOptions, "kind">,
+): PathGuardAuthorizeOptions =>
+  options?.tool === undefined ? { kind } : { kind, tool: options.tool };
 
 const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
   const permission = yield* PermissionService;
   const pathService = yield* EffectPath.Path;
   const roots = yield* Effect.forEach(config.roots, config.canonicalize);
+  const getTargetKind = config.getTargetKind ?? defaultTargetKind;
+  const authorizeCanonical = (
+    canonicalPath: string,
+    options: PathGuardAuthorizeOptions,
+  ): ReturnType<typeof authorizeCanonicalPath> =>
+    authorizeCanonicalPath({
+      canonicalPath,
+      options,
+      pathService,
+      permission,
+      roots,
+      sessionID: config.sessionID,
+    });
+
   const authorize = Effect.fnUntraced(function* (
     path: string,
     options?: PathGuardAuthorizeOptions,
   ) {
     const canonicalPath = yield* config.canonicalize(path);
-    if (roots.some((root) => isInsideRoot(pathService, root, canonicalPath))) {
-      return {
-        canonicalPath,
-        allowedBy: "workspace",
-      } satisfies PathGuardAuthorization;
-    }
-
-    const kind = options?.kind ?? "file";
-    const { parentDir, pattern } = externalDirectoryPattern(
-      pathService,
+    return yield* authorizeCanonical(
       canonicalPath,
-      kind,
+      withTool(options?.kind ?? "file", options),
     );
-    yield* permission.ask({
-      sessionID: config.sessionID,
-      permission: "external_directory",
-      patterns: [pattern],
-      always: [pattern],
-      metadata: { filepath: canonicalPath, parentDir },
-      tool: options?.tool,
-    });
-    return {
-      canonicalPath,
-      allowedBy: "permission",
-    } satisfies PathGuardAuthorization;
   });
 
-  return { authorize } satisfies PathGuardShape;
+  const authorizeExistingPath = Effect.fnUntraced(function* (
+    path: string,
+    options?: Omit<PathGuardAuthorizeOptions, "kind">,
+  ) {
+    const canonicalPath = yield* config.canonicalize(path);
+    const kind = yield* getTargetKind(canonicalPath);
+    const authorization = yield* authorizeCanonical(
+      canonicalPath,
+      withTool(kind, options),
+    );
+    return {
+      ...authorization,
+      kind,
+    } satisfies PathGuardExistingPathAuthorization;
+  });
+
+  const authorizeCreateFile = Effect.fnUntraced(function* (
+    path: string,
+    options?: Omit<PathGuardAuthorizeOptions, "kind">,
+  ) {
+    const parent = yield* config.canonicalize(pathService.dirname(path));
+    const target = pathService.join(parent, pathService.basename(path));
+    return yield* authorizeCanonical(target, withTool("file", options));
+  });
+
+  return {
+    authorize,
+    authorizeCreateFile,
+    authorizeExistingPath,
+  } satisfies PathGuardShape;
 });
 
 export class PathGuard extends Context.Service<PathGuard, PathGuardShape>()(
@@ -76,7 +88,11 @@ export class PathGuard extends Context.Service<PathGuard, PathGuardShape>()(
 ) {
   static layer(
     config: PathGuardConfig,
-  ): Layer.Layer<PathGuard, never, EffectPath.Path | PermissionService> {
+  ): Layer.Layer<
+    PathGuard,
+    PlatformError,
+    EffectPath.Path | PermissionService
+  > {
     return Layer.effect(PathGuard)(makePathGuard(config));
   }
 }

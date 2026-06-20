@@ -6,6 +6,7 @@ import {
   type AgentToolExecuteInput,
   type CoreAgentTool,
   makeAgentTool,
+  type ToolExecutionError,
   type ToolInvocationContext,
 } from "./schema";
 
@@ -13,7 +14,7 @@ export interface ToolShape<Parameters, Details> {
   readonly execute: (
     params: Parameters,
     context?: ToolInvocationContext<Details>,
-  ) => Effect.Effect<PiAgent.AgentToolResult<Details>, unknown>;
+  ) => Effect.Effect<PiAgent.AgentToolResult<Details>, ToolExecutionError>;
 }
 
 export interface ServiceExecutableAgentToolDefinition<

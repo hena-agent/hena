@@ -8,11 +8,11 @@ import {
   type ToolShape,
 } from "./serviceAgentTool";
 
-export const WebfetchToolParameters = Schema.Struct({
+const WebfetchToolParameters = Schema.Struct({
   url: Schema.String.annotate({ description: "The URL to fetch" }),
 });
 
-export type WebfetchToolParameters = (typeof WebfetchToolParameters)["Type"];
+type WebfetchToolParameters = (typeof WebfetchToolParameters)["Type"];
 
 export interface WebfetchToolDetails {
   readonly url: string;

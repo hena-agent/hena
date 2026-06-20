@@ -13,13 +13,13 @@ import {
   type ToolShape,
 } from "./serviceAgentTool";
 
-export const QuestionToolParameters = Schema.Struct({
+const QuestionToolParameters = Schema.Struct({
   questions: Schema.Array(Info).annotate({
     description: "Questions to ask the user",
   }),
 });
 
-export type QuestionToolParameters = (typeof QuestionToolParameters)["Type"];
+type QuestionToolParameters = (typeof QuestionToolParameters)["Type"];
 
 export interface QuestionToolConfig {
   readonly sessionID: string;
@@ -37,10 +37,10 @@ export type QuestionToolShape = ToolShape<
 const formatAnswers = (answers: ReadonlyArray<Answer>): string =>
   answers.map((answer) => answer.join(", ")).join("\n");
 
-const makeQuestionTool = (
+const makeQuestionTool: (
   config: QuestionToolConfig,
-): Effect.Effect<QuestionToolShape, never, QuestionService> =>
-  Effect.gen(function* () {
+) => Effect.Effect<QuestionToolShape, never, QuestionService> =
+  Effect.fnUntraced(function* (config) {
     const questions = yield* QuestionService;
     return {
       execute: Effect.fnUntraced(function* (

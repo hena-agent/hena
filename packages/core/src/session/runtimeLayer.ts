@@ -1,6 +1,10 @@
 import { type Path as EffectPath, type FileSystem, Layer } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
-import type { ExecutionEnvProvider } from "../execution/ExecutionEnvProvider";
+import type {
+  ExecutionEnvProvider,
+  ExecutionEnvProviderError,
+} from "../execution/ExecutionEnvProvider";
 import type { HarnessService } from "../harness/HarnessService";
 import type { PathGuard } from "../path/PathGuard";
 import type { PermissionService } from "../permission/PermissionService";
@@ -10,6 +14,7 @@ import type { AgentHarnessFactory } from "./AgentHarnessFactory";
 import { makeRuntimeHarnessLayer } from "./runtimeHarnessLayer";
 import { makeRuntimePathGuardLayer } from "./runtimePathGuardLayer";
 import type { SessionRuntime } from "./SessionRuntimeService";
+import type { SessionMetadataError } from "./sessionID";
 import type { SessionRuntimeConfig } from "./types";
 
 export const makeSessionRuntimeLayer = (
@@ -21,7 +26,7 @@ export const makeSessionRuntimeLayer = (
   | QuestionService
   | PathGuard
   | ToolWorkspace,
-  unknown,
+  ExecutionEnvProviderError | PlatformError | SessionMetadataError,
   | AgentHarnessFactory
   | ExecutionEnvProvider
   | FileSystem.FileSystem

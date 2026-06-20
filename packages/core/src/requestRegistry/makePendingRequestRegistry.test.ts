@@ -1,5 +1,5 @@
 import { assert, it } from "@effect/vitest";
-import { Effect, Fiber, Stream } from "effect";
+import { Deferred, Effect, Fiber, Stream } from "effect";
 
 import { makePendingRequestRegistry } from "./makePendingRequestRegistry";
 
@@ -105,6 +105,88 @@ it.effect("rejects an asked request when its waiter is interrupted", () =>
         (yield* Fiber.join(eventsFiber)).map((event) => event.type),
         ["asked", "rejected"],
       );
+    }),
+  ),
+);
+
+it.effect("restores pending requests when settlement construction fails", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makeRegistry();
+      const fiber = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const failure = yield* registry
+        .succeed("req-0", "missing", () => Effect.fail("builder-failed"))
+        .pipe(Effect.flip);
+
+      assert.strictEqual(failure, "builder-failed");
+      assert.deepStrictEqual(yield* registry.list(), [
+        { id: "req-0", label: "wait" },
+      ]);
+
+      yield* registry.succeed("req-0", "missing", (request) =>
+        Effect.succeed({
+          value: "accepted",
+          event: { type: "resolved", requestID: request.id },
+        }),
+      );
+
+      assert.strictEqual(yield* Fiber.join(fiber), "accepted");
+    }),
+  ),
+);
+
+it.effect("claims requests before running settlement effects", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makeRegistry();
+      const releaseFirst = yield* Deferred.make<void>();
+      let settlementBuilders = 0;
+      const waiter = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const first = yield* registry
+        .succeed("req-0", "missing", (request) =>
+          Effect.sync(() => {
+            settlementBuilders += 1;
+          }).pipe(
+            Effect.andThen(Deferred.await(releaseFirst)),
+            Effect.as({
+              value: "accepted",
+              event: {
+                type: "resolved",
+                requestID: request.id,
+              } satisfies Event,
+            }),
+          ),
+        )
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const secondError = yield* registry
+        .fail("req-0", "missing", () =>
+          Effect.sync(() => {
+            settlementBuilders += 1;
+            return {
+              failure: "rejected",
+              event: { type: "rejected", requestID: "req-0" } satisfies Event,
+            };
+          }),
+        )
+        .pipe(Effect.flip);
+
+      assert.strictEqual(secondError, "missing");
+      assert.strictEqual(settlementBuilders, 1);
+      assert.deepStrictEqual(yield* registry.list(), []);
+
+      yield* Deferred.succeed(releaseFirst, undefined);
+      yield* Fiber.join(first);
+      assert.strictEqual(yield* Fiber.join(waiter), "accepted");
     }),
   ),
 );

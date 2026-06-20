@@ -1,4 +1,5 @@
 import { Effect, type FileSystem } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
 import { compileGlob } from "./globMatch";
 
@@ -29,7 +30,7 @@ export const grepFile: (
   pattern: RegExp,
   file: string,
   limit: number,
-) => Effect.Effect<GrepResult, unknown> = Effect.fnUntraced(
+) => Effect.Effect<GrepResult, PlatformError> = Effect.fnUntraced(
   function* (fs, pattern, file, limit) {
     const text = yield* fs.readFileString(file);
     const matches: Array<GrepMatch> = [];

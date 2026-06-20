@@ -1,17 +1,13 @@
-import { Effect, PubSub, Stream } from "effect";
+import { Deferred, Effect, PubSub, Stream } from "effect";
 
-import { makeAsk } from "./ask";
-import { rejectPendingOnClose } from "./finalizer";
-import { getPendingRequest } from "./lookup";
-import {
-  completeFailure,
-  completeSuccess,
-  type PendingRequestMap,
-} from "./settlement";
+import { PendingRequestRegistryState } from "./PendingRequestRegistryState";
+import { settlePendingRequest } from "./settlePendingRequest";
 import type {
-  PendingRequestPublish,
+  PendingRequestEntry,
+  PendingRequestFailure,
   PendingRequestRegistry,
   PendingRequestRegistryOptions,
+  PendingRequestSuccess,
 } from "./types";
 
 export const makePendingRequestRegistry = Effect.fnUntraced(function* <
@@ -22,55 +18,58 @@ export const makePendingRequestRegistry = Effect.fnUntraced(function* <
   Event,
 >(options: PendingRequestRegistryOptions<Input, Request, Failure, Event>) {
   type Registry = PendingRequestRegistry<Input, Request, Value, Failure, Event>;
-  const pending: PendingRequestMap<Request, Value, Failure> = new Map();
   const events = yield* PubSub.unbounded<Event>();
-  let nextID = 0;
+  const state = new PendingRequestRegistryState<
+    Input,
+    Request,
+    Value,
+    Failure,
+    Event
+  >(options, events);
 
-  const publish: PendingRequestPublish<Event> = (
-    event: Event,
-  ): Effect.Effect<void> => PubSub.publish(events, event).pipe(Effect.asVoid);
+  yield* Effect.addFinalizer(() => state.close());
 
-  yield* Effect.addFinalizer(() =>
-    rejectPendingOnClose(pending, events, options, publish),
-  );
+  const succeed = <NotFound, MakeSuccess>(
+    requestID: string,
+    notFound: NotFound,
+    makeSuccess: (
+      request: Request,
+    ) => Effect.Effect<PendingRequestSuccess<Value, Event>, MakeSuccess>,
+  ): Effect.Effect<void, NotFound | MakeSuccess> =>
+    settlePendingRequest({
+      context: state.settlementContext(),
+      requestID,
+      notFound,
+      makeSettlement: makeSuccess,
+      completeDeferred: (
+        entry: PendingRequestEntry<Request, Value, Failure>,
+        success: PendingRequestSuccess<Value, Event>,
+      ) => Deferred.succeed(entry.deferred, success.value),
+    });
 
-  const allocateID = (): string => {
-    const id = `${options.idPrefix}-${nextID}`;
-    nextID += 1;
-    return id;
-  };
-
-  const ask = makeAsk<Input, Request, Value, Failure, Event>(
-    pending,
-    options,
-    publish,
-    allocateID,
-  );
-
-  const list = (): Effect.Effect<ReadonlyArray<Request>> =>
-    Effect.sync(() => Array.from(pending.values(), (entry) => entry.request));
-
-  const succeed: Registry["succeed"] = Effect.fnUntraced(
-    function* (requestID, notFound, makeSuccess) {
-      const entry = yield* getPendingRequest(pending, requestID, notFound);
-      const success = yield* makeSuccess(entry.request);
-      yield* completeSuccess({ entry, pending, publish }, notFound, success);
-    },
-  );
-
-  const fail: Registry["fail"] = Effect.fnUntraced(
-    function* (requestID, notFound, makeFailure) {
-      const entry = yield* getPendingRequest(pending, requestID, notFound);
-      const failure = yield* makeFailure(entry.request);
-      yield* completeFailure({ entry, pending, publish }, notFound, failure);
-    },
-  );
+  const fail = <NotFound, MakeFailure>(
+    requestID: string,
+    notFound: NotFound,
+    makeFailure: (
+      request: Request,
+    ) => Effect.Effect<PendingRequestFailure<Failure, Event>, MakeFailure>,
+  ): Effect.Effect<void, NotFound | MakeFailure> =>
+    settlePendingRequest({
+      context: state.settlementContext(),
+      requestID,
+      notFound,
+      makeSettlement: makeFailure,
+      completeDeferred: (
+        entry: PendingRequestEntry<Request, Value, Failure>,
+        failure: PendingRequestFailure<Failure, Event>,
+      ) => Deferred.fail(entry.deferred, failure.failure),
+    });
 
   return {
-    ask,
+    ask: state.ask.bind(state),
     events: Stream.fromPubSub(events),
     fail,
-    list,
+    list: state.list.bind(state),
     succeed,
-  } satisfies PendingRequestRegistry<Input, Request, Value, Failure, Event>;
+  } satisfies Registry;
 });

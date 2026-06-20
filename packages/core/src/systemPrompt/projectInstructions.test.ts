@@ -118,3 +118,27 @@ it.effect("resolves relative roots and target directories from cwd", () =>
     Effect.provide(EffectPath.layer),
   ),
 );
+
+it.effect("deduplicates instruction paths from overlapping roots", () =>
+  Effect.gen(function* () {
+    const instructions = yield* collectProjectInstructions({
+      cwd: "/repo/packages/app",
+      roots: ["/repo", "/repo/packages/app"],
+    });
+
+    assert.deepStrictEqual(instructions, [
+      { path: "/repo/AGENTS.md", content: "root" },
+      { path: "/repo/packages/app/AGENTS.md", content: "app" },
+    ]);
+  }).pipe(
+    Effect.provide(
+      fileLayer(
+        new Map([
+          ["/repo/AGENTS.md", "root"],
+          ["/repo/packages/app/AGENTS.md", "app"],
+        ]),
+      ),
+    ),
+    Effect.provide(EffectPath.layer),
+  ),
+);

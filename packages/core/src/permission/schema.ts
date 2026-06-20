@@ -1,12 +1,8 @@
 import { Schema } from "effect";
 
-import { ToolRef, type ToolRef as ToolRefType } from "../toolRef";
+import { ToolRef } from "../toolRef";
 
 export const PermissionID = Schema.String.check(Schema.isStartsWith("per-"));
-
-export const PermissionTool: typeof ToolRef = ToolRef;
-
-export type PermissionTool = ToolRefType;
 
 export const PermissionMetadata = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -19,16 +15,12 @@ export const PermissionRequest = Schema.Struct({
   patterns: Schema.Array(Schema.String),
   always: Schema.Array(Schema.String),
   metadata: PermissionMetadata,
-  tool: Schema.optional(PermissionTool),
+  tool: Schema.optional(ToolRef),
 });
 
 export type PermissionRequest = Schema.Schema.Type<typeof PermissionRequest>;
 
-export const PermissionGrantScope = Schema.Literals(["once", "always"]);
-
-export type PermissionGrantScope = Schema.Schema.Type<
-  typeof PermissionGrantScope
->;
+const PermissionGrantScope = Schema.Literals(["once", "always"]);
 
 export const PermissionGrant = Schema.Struct({
   requestID: PermissionID,

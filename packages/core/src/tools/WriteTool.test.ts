@@ -32,6 +32,17 @@ it.effect("writes content after PathGuard authorization", () => {
             authorized.push(path);
             return { canonicalPath: path, allowedBy: "workspace" } as const;
           }),
+        authorizeCreateFile: (path) =>
+          Effect.sync(() => {
+            authorized.push(path);
+            return { canonicalPath: path, allowedBy: "workspace" } as const;
+          }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          } as const),
       }),
     ),
     Effect.provide(
@@ -68,6 +79,17 @@ it.effect("passes tool call context to PathGuard authorization", () => {
             authorizedTools.push(options?.tool?.callID);
             return { canonicalPath: path, allowedBy: "workspace" } as const;
           }),
+        authorizeCreateFile: (path, options) =>
+          Effect.sync(() => {
+            authorizedTools.push(options?.tool?.callID);
+            return { canonicalPath: path, allowedBy: "workspace" } as const;
+          }),
+        authorizeExistingPath: (path) =>
+          Effect.succeed({
+            canonicalPath: path,
+            allowedBy: "workspace",
+            kind: "file",
+          } as const),
       }),
     ),
     Effect.provide(

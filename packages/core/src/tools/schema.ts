@@ -1,6 +1,13 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Type } from "@earendil-works/pi-ai";
-import { Effect, JsonSchema, Schema } from "effect";
+import { Effect, Schema } from "effect";
+
+import {
+  type AgentToolParameters,
+  toAgentToolParameters,
+} from "./jsonSchemaParameters";
+import type { ToolExecutionError } from "./toolErrors";
+
+export type { ToolExecutionError } from "./toolErrors";
 
 export interface AgentToolExecuteInput<Parameters, Details> {
   readonly params: Parameters;
@@ -15,8 +22,6 @@ export type ToolInvocationContext<Details> = Omit<
   AgentToolExecuteInput<never, Details>,
   "params"
 >;
-
-type AgentToolParameters = ReturnType<(typeof Type)["Unsafe"]>;
 
 export type CoreAgentTool<Details> = PiAgent.AgentTool<
   AgentToolParameters,
@@ -36,26 +41,15 @@ export interface AgentToolDefinition<
   readonly description: string;
   readonly execute: (
     input: AgentToolExecuteInput<ParametersSchema["Type"], Details>,
-  ) => Effect.Effect<PiAgent.AgentToolResult<Details>, unknown, Requirements>;
+  ) => Effect.Effect<
+    PiAgent.AgentToolResult<Details>,
+    ToolExecutionError,
+    Requirements
+  >;
   readonly label: string;
   readonly name: string;
   readonly parameters: ParametersSchema;
 }
-
-const toJsonSchemaParameters = (schema: Schema.Top): JsonSchema.JsonSchema => {
-  const document = JsonSchema.toDocumentDraft07(
-    Schema.toJsonSchemaDocument(schema, { additionalProperties: false }),
-  );
-
-  return {
-    $schema: JsonSchema.META_SCHEMA_URI_DRAFT_07,
-    ...document.schema,
-    definitions: document.definitions,
-  };
-};
-
-const toAgentToolParameters = (schema: Schema.Top): AgentToolParameters =>
-  Type.Unsafe(toJsonSchemaParameters(schema));
 
 export const makeAgentTool = <
   ParametersSchema extends Schema.Decoder<unknown, never>,

@@ -6,6 +6,7 @@ import type {
   FileSearchResult,
   FileSearchTargetKind,
 } from "./fileSearchTypes";
+import type { ToolExecutionError } from "./schema";
 
 const authorizedPath = Effect.fnUntraced(function* (
   options: FileSearchOptions,
@@ -24,7 +25,7 @@ export const searchFiles: (
   pathService: EffectPath.Path,
   root: string,
   options: FileSearchOptions,
-) => Effect.Effect<FileSearchResult, unknown> = Effect.fnUntraced(
+) => Effect.Effect<FileSearchResult, ToolExecutionError> = Effect.fnUntraced(
   function* (fs, pathService, root, options) {
     const rootInfo = yield* fs.stat(root);
     const collector = makeFileSearchCollector(options);
@@ -32,7 +33,7 @@ export const searchFiles: (
     const visitDirectory: (
       directory: string,
       prefix: string,
-    ) => Effect.Effect<void, unknown> = Effect.fnUntraced(function* (
+    ) => Effect.Effect<void, ToolExecutionError> = Effect.fnUntraced(function* (
       directory: string,
       prefix: string,
     ) {
@@ -52,7 +53,7 @@ export const searchFiles: (
       directory: string,
       prefix: string,
       entry: string,
-    ) => Effect.Effect<void, unknown> = Effect.fnUntraced(function* (
+    ) => Effect.Effect<void, ToolExecutionError> = Effect.fnUntraced(function* (
       directory: string,
       prefix: string,
       entry: string,
@@ -63,22 +64,23 @@ export const searchFiles: (
       const info = yield* fs.stat(fullPath);
 
       if (info.type === "File") {
+        if (!collector.matches(fullPath, relativePath)) {
+          return;
+        }
         const canonicalPath = yield* authorizedPath(options, fullPath, "file");
-        collector.add(canonicalPath, relativePath);
+        collector.add(canonicalPath);
         return;
       }
       if (info.type === "Directory") {
-        const canonicalPath = yield* authorizedPath(
-          options,
-          fullPath,
-          "directory",
-        );
-        yield* visitDirectory(canonicalPath, relativePath);
+        yield* visitDirectory(fullPath, relativePath);
       }
     });
 
     if (rootInfo.type === "File") {
-      collector.add(root, pathService.basename(root));
+      if (collector.matches(root, pathService.basename(root))) {
+        const canonicalPath = yield* authorizedPath(options, root, "file");
+        collector.add(canonicalPath);
+      }
       return collector.result();
     }
     if (rootInfo.type !== "Directory") {

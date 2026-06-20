@@ -17,7 +17,7 @@ import {
 } from "./serviceAgentTool";
 import { ToolWorkspace } from "./workspace";
 
-export const GrepToolParameters = Schema.Struct({
+const GrepToolParameters = Schema.Struct({
   pattern: Schema.String.annotate({
     description: "The regex pattern to search for in file contents",
   }),
@@ -29,7 +29,7 @@ export const GrepToolParameters = Schema.Struct({
   }),
 });
 
-export type GrepToolParameters = (typeof GrepToolParameters)["Type"];
+type GrepToolParameters = (typeof GrepToolParameters)["Type"];
 
 export interface GrepToolDetails {
   readonly matches: number;

@@ -170,3 +170,34 @@ it.effect("stops visiting a directory after truncation", () =>
     Effect.provide(EffectPath.layer),
   ),
 );
+
+it.effect("authorizes only matching file candidates", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const authorized: Array<string> = [];
+    const result = yield* searchFiles(fs, pathService, "/workspace", {
+      limit: 10,
+      matches: (candidate) => candidate.relativePath.endsWith(".ts"),
+      authorize: (path) =>
+        Effect.sync(() => {
+          authorized.push(path);
+          return { canonicalPath: path };
+        }),
+    });
+
+    assert.deepStrictEqual(result.files, ["/workspace/a.ts"]);
+    assert.deepStrictEqual(authorized, ["/workspace/a.ts"]);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readDirectory: () => Effect.succeed(["a.ts", "README.md"]),
+        stat: (path) =>
+          Effect.succeed(
+            path === "/workspace" ? info("Directory") : info("File"),
+          ),
+      }),
+    ),
+    Effect.provide(EffectPath.layer),
+  ),
+);

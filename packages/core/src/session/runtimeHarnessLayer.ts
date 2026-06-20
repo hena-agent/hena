@@ -5,12 +5,14 @@ import {
   type FileSystem,
   Layer,
 } from "effect";
+import type { PlatformError } from "effect/PlatformError";
 
-import { ExecutionEnvProvider } from "../execution/ExecutionEnvProvider";
 import {
-  attachHarnessEventBridge,
-  makeHarnessEventBridge,
-} from "../harness/events";
+  ExecutionEnvProvider,
+  type ExecutionEnvProviderError,
+} from "../execution/ExecutionEnvProvider";
+import { attachHarnessEventBridge } from "../harness/attachEvents";
+import { makeHarnessEventBridge } from "../harness/events";
 import { HarnessService } from "../harness/HarnessService";
 import { makeHarnessService } from "../harness/makeHarnessService";
 import { makeAgentHarnessOptions } from "../harness/options";
@@ -18,6 +20,7 @@ import type { HarnessServiceShape } from "../harness/types";
 import { collectProjectInstructions } from "../systemPrompt/projectInstructions";
 import { AgentHarnessFactory } from "./AgentHarnessFactory";
 import { SessionRuntime } from "./SessionRuntimeService";
+import { getSessionID, type SessionMetadataError } from "./sessionID";
 import { mergeRuntimeSystemPromptConfig } from "./systemPromptConfig";
 import type { SessionRuntimeConfig, SessionRuntimeShape } from "./types";
 
@@ -34,7 +37,7 @@ export const makeRuntimeHarnessLayer = (
   config: SessionRuntimeConfig,
 ): Layer.Layer<
   SessionRuntime | HarnessService,
-  unknown,
+  ExecutionEnvProviderError | PlatformError | SessionMetadataError,
   | AgentHarnessFactory
   | ExecutionEnvProvider
   | FileSystem.FileSystem
@@ -44,6 +47,7 @@ export const makeRuntimeHarnessLayer = (
     Effect.gen(function* () {
       const envProvider = yield* ExecutionEnvProvider;
       const factory = yield* AgentHarnessFactory;
+      const sessionID = yield* getSessionID(config.session);
       const bridge = yield* makeHarnessEventBridge();
       const projectInstructions = yield* collectProjectInstructions(config);
       const systemPrompt = mergeRuntimeSystemPromptConfig(
@@ -55,7 +59,7 @@ export const makeRuntimeHarnessLayer = (
         execution: {
           provider: envProvider,
           request: {
-            sessionID: config.sessionID,
+            sessionID,
             cwd: config.cwd,
             roots: config.roots,
             ...(config.shellEnv === undefined
@@ -72,7 +76,7 @@ export const makeRuntimeHarnessLayer = (
       yield* attachHarnessEventBridge(harness, bridge);
       const harnessService = yield* makeHarnessService(harness);
       return runtimeContext(
-        { sessionID: config.sessionID, events: bridge.stream },
+        { sessionID, events: bridge.stream },
         harnessService,
       );
     }),

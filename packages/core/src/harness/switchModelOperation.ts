@@ -29,7 +29,7 @@ export const makeSwitchModelOperation =
         {
           getThinkingLevel: () =>
             runSync(harness.getThinkingLevel.bind(harness)),
-          setModelAndThinkingLevel: (
+          applyModelThenThinkingLevel: (
             nextModel: HenaModel,
             thinkingLevel: HenaThinkingLevel,
           ) =>

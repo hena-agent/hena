@@ -31,6 +31,14 @@ const info = (type: FileSystem.File.Type): FileSystem.File.Info => ({
 const pathGuard = Layer.succeed(PathGuard)({
   authorize: (path) =>
     Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+  authorizeCreateFile: (path) =>
+    Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+  authorizeExistingPath: (path) =>
+    Effect.succeed({
+      canonicalPath: path,
+      allowedBy: "workspace",
+      kind: path === "/workspace" ? "directory" : "file",
+    }),
 });
 
 it.effect("reads a line-limited file through PathGuard", () =>
@@ -101,22 +109,27 @@ it.effect("reads and sorts a directory", () =>
   ),
 );
 
-it.effect("authorizes directories with directory scope", () => {
-  const seenKinds: Array<string | undefined> = [];
+it.effect("uses PathGuard's existing-path boundary for directory reads", () => {
+  const authorized: Array<string> = [];
   return Effect.gen(function* () {
     const tool = yield* ReadTool;
     yield* tool.execute({ filePath: "/workspace" });
 
-    assert.deepStrictEqual(seenKinds, ["directory"]);
+    assert.deepStrictEqual(authorized, ["/workspace"]);
   }).pipe(
     Effect.provide(ReadTool.Live),
     Effect.provide(
       Layer.succeed(PathGuard)({
-        authorize: (path, options) => {
-          seenKinds.push(options?.kind);
+        authorize: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeCreateFile: (path) =>
+          Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+        authorizeExistingPath: (path) => {
+          authorized.push(path);
           return Effect.succeed({
             canonicalPath: path,
             allowedBy: "workspace",
+            kind: "directory",
           });
         },
       }),

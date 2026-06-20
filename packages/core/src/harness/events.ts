@@ -6,7 +6,10 @@ import {
   deltaKey,
   type QueuedEvent,
 } from "./eventQueue";
-import { type HarnessEventEnvelope, toHarnessEventDTO } from "./eventSchema";
+import {
+  type HarnessEventEnvelope,
+  toHarnessEventEnvelope,
+} from "./eventSchema";
 
 export interface HarnessEventBridge {
   readonly publish: (event: PiAgent.AgentHarnessEvent) => Effect.Effect<void>;
@@ -15,7 +18,7 @@ export interface HarnessEventBridge {
   readonly stream: Stream.Stream<HarnessEventEnvelope>;
 }
 
-export type HarnessEventListener = (event: PiAgent.AgentHarnessEvent) => void;
+type HarnessEventListener = (event: PiAgent.AgentHarnessEvent) => void;
 
 export interface HarnessEventSource {
   readonly subscribe: (listener: HarnessEventListener) => () => void;
@@ -51,6 +54,7 @@ export const makeHarnessEventBridge: () => Effect.Effect<
       return;
     }
 
+    // The queued object is the flush token; the drain identity-checks it.
     pending.event = event;
   };
 
@@ -58,14 +62,14 @@ export const makeHarnessEventBridge: () => Effect.Effect<
     Effect.gen(function* () {
       const queued = yield* Queue.take(queue);
       if (queued._tag === "reliable") {
-        yield* PubSub.publish(pubsub, toHarnessEventDTO(queued.event));
+        yield* PubSub.publish(pubsub, toHarnessEventEnvelope(queued.event));
         return;
       }
 
       if (pendingDeltas.get(queued.key) === queued) {
         pendingDeltas.delete(queued.key);
       }
-      yield* PubSub.publish(pubsub, toHarnessEventDTO(queued.event));
+      yield* PubSub.publish(pubsub, toHarnessEventEnvelope(queued.event));
     }),
   );
 
@@ -82,17 +86,3 @@ export const makeHarnessEventBridge: () => Effect.Effect<
     stream: Stream.fromPubSub(pubsub),
   } satisfies HarnessEventBridge;
 });
-
-export const attachHarnessEventBridge = (
-  harness: HarnessEventSource,
-  bridge: HarnessEventBridge,
-): Effect.Effect<void, never, Scope.Scope> =>
-  Effect.sync(() =>
-    harness.subscribe((event: PiAgent.AgentHarnessEvent): void => {
-      bridge.publishUnsafe(event);
-    }),
-  ).pipe(
-    Effect.flatMap((unsubscribe) =>
-      Effect.addFinalizer(() => Effect.sync(unsubscribe)),
-    ),
-  );

@@ -7,7 +7,6 @@
     },
     "packages/core": {
       "entry": ["src/index.ts"],
-      "ignoreExportsUsedInFile": true,
       "project": ["src/**/*.ts"]
     },
     "packages/extensions": {

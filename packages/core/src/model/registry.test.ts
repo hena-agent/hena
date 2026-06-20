@@ -3,6 +3,7 @@ import { Effect } from "effect";
 
 import {
   type CustomModelConfig,
+  DefaultModelNotFoundError,
   ModelNotFoundError,
   makeModelRegistry,
 } from "./registry";
@@ -54,6 +55,8 @@ it.effect(
             provider: "minimal",
             id: "tiny",
             baseUrl: "http://localhost:1234/v1",
+            contextWindow: 4_096,
+            maxTokens: 512,
           },
         ],
       });
@@ -68,8 +71,8 @@ it.effect(
         authorization: "Bearer token",
       });
       assert.strictEqual(minimal?.name, "tiny");
-      assert.strictEqual(minimal?.contextWindow, 0);
-      assert.strictEqual(minimal?.maxTokens, 0);
+      assert.strictEqual(minimal?.contextWindow, 4_096);
+      assert.strictEqual(minimal?.maxTokens, 512);
     }),
 );
 
@@ -144,7 +147,6 @@ it.effect("fails when no default model is available", () =>
     });
     const error = yield* registry.getDefaultModel().pipe(Effect.flip);
 
-    assert.ok(error instanceof ModelNotFoundError);
-    assert.strictEqual(error.provider, "default");
+    assert.ok(error instanceof DefaultModelNotFoundError);
   }),
 );

@@ -12,7 +12,7 @@ import {
   type ToolShape,
 } from "./serviceAgentTool";
 
-export const WriteToolParameters = Schema.Struct({
+const WriteToolParameters = Schema.Struct({
   content: Schema.String.annotate({
     description: "The content to write to the file",
   }),
@@ -21,7 +21,7 @@ export const WriteToolParameters = Schema.Struct({
   }),
 });
 
-export type WriteToolParameters = (typeof WriteToolParameters)["Type"];
+type WriteToolParameters = (typeof WriteToolParameters)["Type"];
 
 export interface WriteToolDetails {
   readonly path: string;
@@ -41,7 +41,7 @@ const makeWriteTool = Effect.fnUntraced(function* () {
       context?: ToolInvocationContext<WriteToolDetails>,
     ) {
       const tool = toolReferenceFromContext(context);
-      const authorization = yield* pathGuard.authorize(
+      const authorization = yield* pathGuard.authorizeCreateFile(
         params.filePath,
         tool === undefined ? undefined : { tool },
       );

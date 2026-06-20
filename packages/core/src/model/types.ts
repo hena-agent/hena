@@ -2,7 +2,7 @@ import type * as PiAgent from "@earendil-works/pi-agent-core";
 import type * as PiAi from "@earendil-works/pi-ai";
 import type { Effect } from "effect";
 
-import type { ModelNotFoundError } from "./errors";
+import type { DefaultModelNotFoundError, ModelNotFoundError } from "./errors";
 
 export interface ModelRef {
   readonly provider: string;
@@ -16,12 +16,12 @@ interface ProviderFilter {
 export interface CustomModelConfig {
   readonly api?: PiAi.Api;
   readonly baseUrl: string;
-  readonly contextWindow?: number;
+  readonly contextWindow: number;
   readonly cost?: PiAi.Model<PiAi.Api>["cost"];
   readonly headers?: Readonly<Record<string, string>>;
   readonly id: string;
   readonly input?: ReadonlyArray<"text" | "image">;
-  readonly maxTokens?: number;
+  readonly maxTokens: number;
   readonly name?: string;
   readonly provider: string;
   readonly reasoning?: boolean;
@@ -42,7 +42,7 @@ export type HenaThinkingLevel = PiAgent.ThinkingLevel;
 export interface ModelRegistryShape {
   readonly getDefaultModel: (
     workspaceID?: string,
-  ) => Effect.Effect<HenaModel, ModelNotFoundError>;
+  ) => Effect.Effect<HenaModel, DefaultModelNotFoundError | ModelNotFoundError>;
   readonly getModel: (
     ref: ModelRef,
   ) => Effect.Effect<HenaModel, ModelNotFoundError>;

@@ -2,7 +2,8 @@ import type { FileSearchOptions, FileSearchResult } from "./fileSearchTypes";
 
 export interface FileSearchCollector {
   readonly truncated: boolean;
-  readonly add: (path: string, relativePath: string) => void;
+  readonly add: (path: string) => void;
+  readonly matches: (path: string, relativePath: string) => boolean;
   readonly result: () => FileSearchResult;
 }
 
@@ -18,18 +19,15 @@ export const makeFileSearchCollector = (
     get truncated(): boolean {
       return truncated;
     },
-    add: (path: string, relativePath: string): void => {
-      if (
-        !options.matches({ path, relativePath: normalizePath(relativePath) })
-      ) {
-        return;
-      }
+    add: (path: string): void => {
       if (files.length >= options.limit) {
         truncated = true;
         return;
       }
       files.push(path);
     },
+    matches: (path: string, relativePath: string): boolean =>
+      options.matches({ path, relativePath: normalizePath(relativePath) }),
     result: (): FileSearchResult => ({ files, truncated }),
   };
 };

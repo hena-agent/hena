@@ -1,5 +1,7 @@
 import type { Effect } from "effect";
 
+import type { ToolExecutionError } from "./schema";
+
 export interface FileSearchCandidate {
   readonly path: string;
   readonly relativePath: string;
@@ -10,7 +12,7 @@ export type FileSearchTargetKind = "directory" | "file";
 export type FileSearchAuthorize = (
   path: string,
   kind: FileSearchTargetKind,
-) => Effect.Effect<{ readonly canonicalPath: string }, unknown>;
+) => Effect.Effect<{ readonly canonicalPath: string }, ToolExecutionError>;
 
 export interface FileSearchOptions {
   readonly authorize?: FileSearchAuthorize | undefined;

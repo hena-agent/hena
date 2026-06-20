@@ -7,7 +7,7 @@ import type {
 import { searchFiles } from "./files";
 import { compileGlob } from "./globMatch";
 
-export interface GlobSearchParameters {
+interface GlobSearchParameters {
   readonly pattern: string;
 }
 

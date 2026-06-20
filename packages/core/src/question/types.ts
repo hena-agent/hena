@@ -1,5 +1,6 @@
 import type { Effect, Stream } from "effect";
 
+import type { ToolRef } from "../toolRef";
 import type {
   Answer,
   Info,
@@ -9,13 +10,12 @@ import type {
   QuestionRequestNotFound,
   Reply,
   Request,
-  Tool,
 } from "./schema";
 
 export interface AskInput {
   readonly sessionID: string;
   readonly questions: ReadonlyArray<Info>;
-  readonly tool?: Tool;
+  readonly tool?: ToolRef;
 }
 
 export interface QuestionServiceShape {

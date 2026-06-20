@@ -5,7 +5,7 @@ import type { HenaModel, HenaThinkingLevel } from "./types";
 
 export interface HarnessModelRuntime<Error = unknown> {
   readonly getThinkingLevel: () => Effect.Effect<HenaThinkingLevel>;
-  readonly setModelAndThinkingLevel: (
+  readonly applyModelThenThinkingLevel: (
     model: HenaModel,
     level: HenaThinkingLevel,
   ) => Effect.Effect<void, Error>;
@@ -33,7 +33,7 @@ export const switchHarnessModel: <Error>(
         : requestedLevel;
     const thinkingLevel = resolveThinkingLevel(model, currentLevel);
 
-    yield* runtime.setModelAndThinkingLevel(model, thinkingLevel);
+    yield* runtime.applyModelThenThinkingLevel(model, thinkingLevel);
 
     return { model, thinkingLevel } satisfies SwitchHarnessModelResult;
   },

@@ -13,7 +13,7 @@ import {
   type ToolShape,
 } from "./serviceAgentTool";
 
-export const EditToolParameters = Schema.Struct({
+const EditToolParameters = Schema.Struct({
   filePath: Schema.String.annotate({
     description: "The absolute path to the file to edit",
   }),
@@ -25,7 +25,7 @@ export const EditToolParameters = Schema.Struct({
   }),
 });
 
-export type EditToolParameters = (typeof EditToolParameters)["Type"];
+type EditToolParameters = (typeof EditToolParameters)["Type"];
 
 export interface EditToolDetails {
   readonly path: string;

@@ -1,7 +1,7 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
-import { Context, Effect, Layer, Schema, Stream } from "effect";
-import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process";
-
+import { Context, Effect, Layer, Schema } from "effect";
+import type { ChildProcessSpawner } from "effect/unstable/process";
+import { ShellExecutor } from "./ShellExecutor";
 import type { CoreAgentTool } from "./schema";
 import {
   makeServiceExecuteAgentTool,
@@ -9,11 +9,11 @@ import {
 } from "./serviceAgentTool";
 import { ToolWorkspace } from "./workspace";
 
-export const BashToolParameters = Schema.Struct({
+const BashToolParameters = Schema.Struct({
   command: Schema.String.annotate({ description: "The shell command to run" }),
 });
 
-export type BashToolParameters = (typeof BashToolParameters)["Type"];
+type BashToolParameters = (typeof BashToolParameters)["Type"];
 
 export interface BashToolDetails {
   readonly command: string;
@@ -23,33 +23,20 @@ export interface BashToolDetails {
 
 export type BashToolShape = ToolShape<BashToolParameters, BashToolDetails>;
 
-const collectOutput = (
-  handle: ChildProcessSpawner.ChildProcessHandle,
-): Effect.Effect<string, unknown> =>
-  handle.all.pipe(Stream.decodeText(), Stream.mkString);
-
 const makeBashTool = Effect.fnUntraced(function* () {
-  const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+  const shell = yield* ShellExecutor;
   const workspace = yield* ToolWorkspace;
   return {
     execute: Effect.fnUntraced(function* (params: BashToolParameters) {
-      return yield* Effect.scoped(
-        Effect.gen(function* () {
-          const command = ChildProcess.make("sh", ["-c", params.command], {
-            cwd: workspace.cwd,
-          });
-          const handle = yield* spawner.spawn(command);
-          const output = yield* collectOutput(handle);
-          const exitCode = Number(yield* handle.exitCode);
-          if (exitCode !== 0) {
-            return yield* Effect.fail(new Error(output));
-          }
-          return {
-            content: [{ type: "text", text: output }],
-            details: { command: params.command, cwd: workspace.cwd, exitCode },
-          } satisfies PiAgent.AgentToolResult<BashToolDetails>;
-        }),
-      );
+      const result = yield* shell.execute(params.command, workspace.cwd);
+      return {
+        content: [{ type: "text", text: result.output }],
+        details: {
+          command: params.command,
+          cwd: workspace.cwd,
+          exitCode: result.exitCode,
+        },
+      } satisfies PiAgent.AgentToolResult<BashToolDetails>;
     }),
   } satisfies BashToolShape;
 });
@@ -61,7 +48,9 @@ export class BashTool extends Context.Service<BashTool, BashToolShape>()(
     BashTool,
     never,
     ChildProcessSpawner.ChildProcessSpawner | ToolWorkspace
-  > = Layer.effect(BashTool)(makeBashTool());
+  > = Layer.effect(BashTool)(makeBashTool()).pipe(
+    Layer.provideMerge(ShellExecutor.Live),
+  );
 }
 
 export const makeBashAgentTool = (

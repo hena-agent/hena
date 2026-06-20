@@ -64,7 +64,7 @@ export const makeLocalExecutionEnvProvider = (): ExecutionEnvProviderShape => ({
   create: (
     request: ExecutionEnvRequest,
   ): Effect.Effect<ExecutionEnvironment, ExecutionEnvProviderError> =>
-    Effect.succeed(localEnvironment(request)),
+    Effect.sync(() => localEnvironment(request)),
 });
 
 export const makeCloudExecutionEnvProvider = (): ExecutionEnvProviderShape => ({

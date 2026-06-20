@@ -4,7 +4,8 @@ import * as PiAi from "@earendil-works/pi-ai";
 import { assert, it } from "@effect/vitest";
 import { Effect, Fiber, Stream } from "effect";
 
-import { attachHarnessEventBridge, makeHarnessEventBridge } from "./events";
+import { attachHarnessEventBridge } from "./attachEvents";
+import { makeHarnessEventBridge } from "./events";
 
 const makeSession = async (id: string): Promise<PiAgent.Session> => {
   const repo = new PiAgent.InMemorySessionRepo();

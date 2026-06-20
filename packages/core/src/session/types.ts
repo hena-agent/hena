@@ -7,8 +7,6 @@ import type { HarnessLike } from "../harness/types";
 import type { CredentialResolverShape } from "../model/credentials";
 import type { HenaModel, HenaThinkingLevel } from "../model/types";
 
-export type { HarnessEventSource } from "../harness/events";
-
 export type SessionRuntimeHarness = HarnessLike & HarnessEventSource;
 
 export interface SessionRuntimeConfig {
@@ -19,7 +17,6 @@ export interface SessionRuntimeConfig {
   readonly resources?: PiAgent.AgentHarnessResources;
   readonly roots: ReadonlyArray<string>;
   readonly session: PiAgent.Session;
-  readonly sessionID: string;
   readonly shellEnv?: Readonly<Record<string, string>>;
   readonly shellPath?: string;
   readonly streamOptions?: PiAgent.AgentHarnessStreamOptions;

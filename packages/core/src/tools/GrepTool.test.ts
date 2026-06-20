@@ -10,6 +10,7 @@ import {
 
 import { PathGuard } from "../path/PathGuard";
 import { GrepTool, makeGrepAgentTool } from "./GrepTool";
+import { ToolInputError } from "./toolErrors";
 import { ToolWorkspace } from "./workspace";
 
 const info = (type: FileSystem.File.Type): FileSystem.File.Info => ({
@@ -36,6 +37,14 @@ const makeLayer = GrepTool.Live.pipe(
     Layer.succeed(PathGuard)({
       authorize: (path) =>
         Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+      authorizeCreateFile: (path) =>
+        Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+      authorizeExistingPath: (path) =>
+        Effect.succeed({
+          canonicalPath: path,
+          allowedBy: "workspace",
+          kind: "file",
+        }),
     }),
   ),
   Layer.provideMerge(
@@ -80,6 +89,15 @@ it.effect("returns content for no grep matches", () =>
       { type: "text", text: "No files found" },
     ]);
     assert.deepStrictEqual(result.details, { matches: 0, truncated: false });
+  }).pipe(Effect.provide(makeLayer)),
+);
+
+it.effect("fails invalid regular expressions as typed tool input errors", () =>
+  Effect.gen(function* () {
+    const tool = yield* GrepTool;
+    const error = yield* tool.execute({ pattern: "[" }).pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
   }).pipe(Effect.provide(makeLayer)),
 );
 

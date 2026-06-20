@@ -7,7 +7,7 @@ import type {
   FileSearchTargetKind,
 } from "./fileSearchTypes";
 import type { ToolInvocationContext } from "./schema";
-import { toolReferenceFromContext } from "./schema";
+import { type ToolExecutionError, toolReferenceFromContext } from "./schema";
 import { resolvePath, type ToolWorkspaceConfig } from "./workspace";
 
 export interface DirectorySearchParameters {
@@ -25,11 +25,11 @@ export interface DirectorySearchInput<
   readonly pathService: EffectPath.Path;
   readonly search: (
     input: DirectorySearchExecutionInput<Parameters>,
-  ) => Effect.Effect<PiAgent.AgentToolResult<Details>, unknown>;
+  ) => Effect.Effect<PiAgent.AgentToolResult<Details>, ToolExecutionError>;
   readonly workspace: ToolWorkspaceConfig;
 }
 
-export interface DirectorySearchExecutionInput<
+interface DirectorySearchExecutionInput<
   Parameters extends DirectorySearchParameters,
 > {
   readonly authorize: FileSearchAuthorize;

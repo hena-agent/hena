@@ -7,6 +7,14 @@ import { EditTool, makeEditAgentTool } from "./EditTool";
 const pathGuard = Layer.succeed(PathGuard)({
   authorize: (path) =>
     Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+  authorizeCreateFile: (path) =>
+    Effect.succeed({ canonicalPath: path, allowedBy: "workspace" }),
+  authorizeExistingPath: (path) =>
+    Effect.succeed({
+      canonicalPath: path,
+      allowedBy: "workspace",
+      kind: "file",
+    }),
 });
 
 it.effect(

@@ -1,7 +1,8 @@
 import { assert, it } from "@effect/vitest";
 import { Schema } from "effect";
 
-import { PermissionID, PermissionRequest, PermissionTool } from "./schema";
+import { ToolRef } from "../toolRef";
+import { PermissionID, PermissionRequest } from "./schema";
 
 it("accepts only per-prefixed permission ids", () => {
   assert.strictEqual(Schema.decodeUnknownSync(PermissionID)("per-1"), "per-1");
@@ -9,7 +10,7 @@ it("accepts only per-prefixed permission ids", () => {
 });
 
 it("preserves permission tool message and call ids", () => {
-  const tool = Schema.decodeUnknownSync(PermissionTool)({
+  const tool = Schema.decodeUnknownSync(ToolRef)({
     messageID: "msg-1",
     callID: "call-1",
   });

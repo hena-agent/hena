@@ -14,9 +14,6 @@ export const getSessionID = (
     try: () => session.getMetadata(),
     catch: (error: unknown) =>
       new SessionMetadataError({
-        message:
-          error instanceof Error
-            ? error.message
-            : "Failed to read session metadata",
+        message: String(error).replace(/^Error: /, ""),
       }),
   }).pipe(Effect.map((metadata) => metadata.id));

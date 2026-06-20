@@ -162,6 +162,19 @@ it.effect("detects kind inside the existing-path authorization boundary", () =>
   ),
 );
 
+it.effect("defaults existing-path authorization to files", () =>
+  Effect.gen(function* () {
+    const guard = yield* PathGuard;
+    const authorization = yield* guard.authorizeExistingPath("/workspace/a.ts");
+
+    assert.deepStrictEqual(authorization, {
+      canonicalPath: "/workspace/a.ts",
+      allowedBy: "workspace",
+      kind: "file",
+    });
+  }).pipe(Effect.provide(providePathGuard(["/workspace"]))),
+);
+
 it.effect(
   "authorizes file creation by canonicalizing the parent directory",
   () =>

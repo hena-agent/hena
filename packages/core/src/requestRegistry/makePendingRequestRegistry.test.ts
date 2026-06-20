@@ -190,3 +190,47 @@ it.effect("claims requests before running settlement effects", () =>
     }),
   ),
 );
+
+it.effect("does not reject interrupted waiters after settlement claims", () =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const registry = yield* makeRegistry();
+      const settlementClaimed = yield* Deferred.make<void>();
+      const releaseSettlement = yield* Deferred.make<void>();
+      const eventsFiber = yield* registry.events.pipe(
+        Stream.take(2),
+        Stream.runCollect,
+        Effect.forkDetach({ startImmediately: true }),
+      );
+      const waiter = yield* registry
+        .ask({ label: "wait" })
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Effect.yieldNow;
+      const settlement = yield* registry
+        .succeed("req-0", "missing", (request) =>
+          Deferred.succeed(settlementClaimed, undefined).pipe(
+            Effect.andThen(Deferred.await(releaseSettlement)),
+            Effect.as({
+              value: "accepted",
+              event: {
+                type: "resolved",
+                requestID: request.id,
+              } satisfies Event,
+            }),
+          ),
+        )
+        .pipe(Effect.forkDetach({ startImmediately: true }));
+
+      yield* Deferred.await(settlementClaimed);
+      yield* Fiber.interrupt(waiter);
+      yield* Deferred.succeed(releaseSettlement, undefined);
+      yield* Fiber.join(settlement);
+
+      assert.deepStrictEqual(
+        (yield* Fiber.join(eventsFiber)).map((event) => event.type),
+        ["asked", "resolved"],
+      );
+    }),
+  ),
+);

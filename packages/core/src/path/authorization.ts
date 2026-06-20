@@ -5,11 +5,14 @@ import { externalDirectoryPattern, isInsideRoot } from "./helpers";
 import type {
   PathGuardAuthorization,
   PathGuardAuthorizeOptions,
+  PathGuardTargetKind,
 } from "./PathGuardTypes";
 
 interface AuthorizeCanonicalPathInput {
   readonly canonicalPath: string;
-  readonly options: PathGuardAuthorizeOptions;
+  readonly options: PathGuardAuthorizeOptions & {
+    readonly kind: PathGuardTargetKind;
+  };
   readonly pathService: EffectPath.Path;
   readonly permission: PermissionServiceShape;
   readonly roots: ReadonlyArray<string>;
@@ -28,11 +31,10 @@ export const authorizeCanonicalPath = Effect.fnUntraced(function* (
     } satisfies PathGuardAuthorization;
   }
 
-  const kind = options.kind ?? "file";
   const { parentDir, pattern } = externalDirectoryPattern(
     pathService,
     canonicalPath,
-    kind,
+    options.kind,
   );
   yield* permission.ask({
     sessionID,

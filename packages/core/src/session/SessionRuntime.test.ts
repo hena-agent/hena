@@ -2,7 +2,7 @@ import * as PiAgent from "@earendil-works/pi-agent-core";
 import * as PiNode from "@earendil-works/pi-agent-core/node";
 import * as PiAi from "@earendil-works/pi-ai";
 import { assert, it } from "@effect/vitest";
-import { Effect, Path as EffectPath, FileSystem, Layer } from "effect";
+import { Effect, Path as EffectPath, FileSystem, Layer, Option } from "effect";
 import { TestClock } from "effect/testing";
 
 import {
@@ -11,6 +11,8 @@ import {
 } from "../execution/ExecutionEnvProvider";
 import { HarnessService } from "../harness/HarnessService";
 import { makeCredentialResolver } from "../model/credentials";
+import { PathGuard } from "../path/PathGuard";
+import { makeRuntimePathGuardLayer } from "./runtimePathGuardLayer";
 import {
   AgentHarnessFactory,
   SessionRuntime,
@@ -20,6 +22,23 @@ import {
 } from "./SessionRuntime";
 
 const model = PiAi.getModel("openai", "gpt-4o-mini");
+
+const fileInfo = (type: FileSystem.File.Type): FileSystem.File.Info => ({
+  type,
+  mtime: Option.none(),
+  atime: Option.none(),
+  birthtime: Option.none(),
+  dev: 0,
+  ino: Option.none(),
+  mode: 0,
+  nlink: Option.none(),
+  uid: Option.none(),
+  gid: Option.none(),
+  rdev: Option.none(),
+  size: FileSystem.Size(0),
+  blksize: Option.none(),
+  blocks: Option.none(),
+});
 
 const assistantMessage = (): PiAi.AssistantMessage =>
   PiAi.fauxAssistantMessage("ok", { timestamp: 1 });
@@ -228,6 +247,36 @@ it.effect("passes shell options into the execution environment request", () =>
       assert.strictEqual(state.request?.shellPath, "/bin/zsh");
     }),
   ),
+);
+
+it.effect("detects runtime path guard target kinds from filesystem stat", () =>
+  Effect.gen(function* () {
+    const session = yield* makeSession("ses_path");
+    const layer = makeRuntimePathGuardLayer({
+      cwd: "/repo",
+      model,
+      roots: ["/repo"],
+      session,
+    }).pipe(
+      Layer.provideMerge(
+        FileSystem.layerNoop({
+          realPath: (path) => Effect.succeed(path),
+          stat: (path) =>
+            Effect.succeed(fileInfo(path === "/repo" ? "Directory" : "File")),
+        }),
+      ),
+      Layer.provideMerge(EffectPath.layer),
+    );
+
+    yield* Effect.gen(function* () {
+      const guard = yield* PathGuard;
+      const directory = yield* guard.authorizeExistingPath("/repo");
+      const file = yield* guard.authorizeExistingPath("/repo/file.ts");
+
+      assert.strictEqual(directory.kind, "directory");
+      assert.strictEqual(file.kind, "file");
+    }).pipe(Effect.provide(layer));
+  }),
 );
 
 it.effect("injects discovered project instructions into harness options", () =>

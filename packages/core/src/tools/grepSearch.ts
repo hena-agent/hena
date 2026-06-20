@@ -36,7 +36,7 @@ const compilePattern = (
     try: () => new RegExp(pattern),
     catch: (error: unknown) =>
       new ToolInputError({
-        message: error instanceof Error ? error.message : "Invalid regex",
+        message: String(error),
       }),
   });
 

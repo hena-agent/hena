@@ -19,7 +19,7 @@ const defaultTargetKind = (): Effect.Effect<PathGuardTargetKind> =>
 const withTool = (
   kind: PathGuardTargetKind,
   options?: Omit<PathGuardAuthorizeOptions, "kind">,
-): PathGuardAuthorizeOptions =>
+): PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind } =>
   options?.tool === undefined ? { kind } : { kind, tool: options.tool };
 
 const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
@@ -29,7 +29,7 @@ const makePathGuard = Effect.fnUntraced(function* (config: PathGuardConfig) {
   const getTargetKind = config.getTargetKind ?? defaultTargetKind;
   const authorizeCanonical = (
     canonicalPath: string,
-    options: PathGuardAuthorizeOptions,
+    options: PathGuardAuthorizeOptions & { readonly kind: PathGuardTargetKind },
   ): ReturnType<typeof authorizeCanonicalPath> =>
     authorizeCanonicalPath({
       canonicalPath,

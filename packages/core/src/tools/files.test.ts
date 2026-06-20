@@ -44,6 +44,26 @@ it.effect("lists a single file root", () =>
   ),
 );
 
+it.effect("returns no file-root result when the root does not match", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const result = yield* searchFiles(fs, pathService, "/workspace/file.ts", {
+      limit: 10,
+      matches: () => false,
+    });
+
+    assert.deepStrictEqual(result, { files: [], truncated: false });
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        stat: () => Effect.succeed(info("File")),
+      }),
+    ),
+    Effect.provide(EffectPath.layer),
+  ),
+);
+
 it.effect("lists files under a directory root", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

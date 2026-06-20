@@ -34,9 +34,7 @@ const restoreClaim = <Request extends { readonly id: string }, Value, Failure>(
   entry: PendingRequestEntry<Request, Value, Failure>,
 ): Effect.Effect<void> =>
   Effect.sync(() => {
-    if (!pending.has(entry.request.id)) {
-      pending.set(entry.request.id, entry);
-    }
+    pending.set(entry.request.id, entry);
   });
 
 export const settlePendingRequest = <

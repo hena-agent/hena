@@ -155,6 +155,21 @@ it.effect("rejects unsafe nested-quantifier regular expressions", () =>
   }).pipe(Effect.provide(makeLayer)),
 );
 
+it.effect("rejects quantified alternation regular expressions", () =>
+  Effect.gen(function* () {
+    const tool = yield* GrepTool;
+    const error = yield* tool
+      .execute({ pattern: "(a|aa)+$" })
+      .pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolInputError);
+    assert.strictEqual(
+      error.message,
+      "Unsafe regular expressions are not allowed.",
+    );
+  }).pipe(Effect.provide(makeLayer)),
+);
+
 it("adapts GrepTool to a pi AgentTool", async () => {
   const tool = makeGrepAgentTool(
     Context.make(GrepTool, {

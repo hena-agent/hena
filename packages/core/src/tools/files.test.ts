@@ -191,6 +191,37 @@ it.effect("stops visiting a directory after truncation", () =>
   ),
 );
 
+it.effect("caps directory entries before sorting and statting", () => {
+  let statCalls = 0;
+  return Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const pathService = yield* EffectPath.Path;
+    const result = yield* searchFiles(fs, pathService, "/workspace", {
+      limit: 20000,
+      matches: matchAll,
+    });
+
+    assert.strictEqual(result.files.length, 10000);
+    assert.strictEqual(result.truncated, true);
+    assert.strictEqual(statCalls, 10001);
+  }).pipe(
+    Effect.provide(
+      FileSystem.layerNoop({
+        readDirectory: () =>
+          Effect.succeed(
+            Array.from({ length: 10001 }, (_, index) => `file-${index}`),
+          ),
+        stat: (path) =>
+          Effect.sync(() => {
+            statCalls += 1;
+            return path === "/workspace" ? info("Directory") : info("File");
+          }),
+      }),
+    ),
+    Effect.provide(EffectPath.layer),
+  );
+});
+
 it.effect("authorizes directories and matching file candidates", () =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;

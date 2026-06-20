@@ -210,7 +210,7 @@ it.effect("caches a session runtime until the idle TTL expires", () =>
         const second = yield* readSession("ses_1");
 
         assert.strictEqual(first.runtime.sessionID, "ses_1");
-        assert.strictEqual(second.currentModel, model);
+        assert.deepStrictEqual(second.currentModel, model);
         assert.strictEqual(state.loads, 1);
         assert.strictEqual(state.creates, 1);
         assert.strictEqual(state.cleanups, 0);

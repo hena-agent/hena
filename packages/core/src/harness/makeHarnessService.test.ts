@@ -446,7 +446,7 @@ it.effect("rolls back model switches when thinking level update fails", () =>
 
     assert.ok(error instanceof HarnessServiceError);
     assert.strictEqual(error.code, "invalid_argument");
-    assert.strictEqual(harness.model, modelOne);
+    assert.deepStrictEqual(harness.model, modelOne);
     assert.strictEqual(harness.thinkingLevel, "minimal");
     assert.deepStrictEqual(harness.calls, [
       "setModel:two",
@@ -467,7 +467,7 @@ it.effect("surfaces rollback failures during model switches", () =>
 
     assert.ok(error instanceof HarnessServiceError);
     assert.strictEqual(error.code, "invalid_state");
-    assert.strictEqual(harness.model, modelTwo);
+    assert.deepStrictEqual(harness.model, modelTwo);
     assert.deepStrictEqual(harness.calls, [
       "setModel:two",
       "setThinking:off",
@@ -579,7 +579,7 @@ it.effect("exposes runtime getters and setters", () =>
     yield* service.setResources({ skills: [] });
     yield* service.setStreamOptions({ timeoutMs: 1_000 });
 
-    assert.strictEqual(yield* service.getModel(), modelTwo);
+    assert.deepStrictEqual(yield* service.getModel(), modelTwo);
     assert.strictEqual(yield* service.getThinkingLevel(), "high");
     assert.deepStrictEqual(yield* service.getTools(), [tool]);
     assert.deepStrictEqual(yield* service.getActiveTools(), [tool]);
@@ -605,6 +605,12 @@ it.effect("snapshots mutable harness getter DTOs", () =>
       },
     };
     const harness = new FakeHarness();
+    harness.model = {
+      ...modelOne,
+      input: ["text"],
+      cost: { ...modelOne.cost },
+      thinkingLevelMap: { low: "low" },
+    };
     harness.tools = [tool];
     harness.activeTools = [tool];
     harness.resources = {
@@ -623,6 +629,11 @@ it.effect("snapshots mutable harness getter DTOs", () =>
       metadata: { trace: "one" },
     };
     const service = yield* makeHarnessService(harness);
+
+    const model = yield* service.getModel();
+    model.input.push("image");
+    model.cost.input = 1;
+    Object.assign(model.thinkingLevelMap ?? {}, { low: "mutated" });
 
     const tools = yield* service.getTools();
     const [returnedTool] = tools;
@@ -649,6 +660,12 @@ it.effect("snapshots mutable harness getter DTOs", () =>
     Object.assign(streamOptions.metadata ?? {}, { trace: "mutated" });
 
     assert.strictEqual((yield* service.getTools()).length, 1);
+    assert.deepStrictEqual((yield* service.getModel()).input, ["text"]);
+    assert.strictEqual((yield* service.getModel()).cost.input, 0);
+    assert.strictEqual(
+      (yield* service.getModel()).thinkingLevelMap?.low,
+      "low",
+    );
     assert.strictEqual((yield* service.getTools())[0]?.name, "example");
     assert.strictEqual((yield* service.getActiveTools())[0]?.label, "Example");
     assert.strictEqual(

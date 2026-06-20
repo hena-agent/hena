@@ -1,5 +1,6 @@
 import { Effect, type Semaphore } from "effect";
 
+import { snapshotModel } from "../model/customModel";
 import { switchHarnessModel } from "../model/thinking";
 import type { HenaModel, HenaThinkingLevel } from "../model/types";
 import { HarnessServiceError, normalizeHarnessError } from "./errors";
@@ -16,7 +17,7 @@ const setModel = (
   harness: HarnessLike,
   model: HenaModel,
 ): Effect.Effect<void, HarnessServiceError> =>
-  runPromise(harness.setModel.bind(harness, model));
+  runPromise(harness.setModel.bind(harness, snapshotModel(model)));
 
 const setThinkingLevel = (
   harness: HarnessLike,
@@ -51,7 +52,9 @@ const applyModelThenThinkingLevel: (
   thinkingLevel: HenaThinkingLevel,
 ) => Effect.Effect<void, HarnessServiceError> = Effect.fnUntraced(
   function* (harness, nextModel, thinkingLevel) {
-    const previousModel = yield* runSync(harness.getModel.bind(harness));
+    const previousModel = yield* runSync(() =>
+      snapshotModel(harness.getModel()),
+    );
     const previousThinkingLevel = yield* runSync(
       harness.getThinkingLevel.bind(harness),
     );
@@ -77,8 +80,9 @@ export const makeSwitchModelOperation =
   ): Effect.Effect<
     { readonly model: HenaModel; readonly thinkingLevel: HenaThinkingLevel },
     HarnessServiceError
-  > =>
-    semaphore.withPermit(
+  > => {
+    const modelSnapshot = snapshotModel(model);
+    return semaphore.withPermit(
       switchHarnessModel<HarnessServiceError>(
         {
           getThinkingLevel: () =>
@@ -88,7 +92,8 @@ export const makeSwitchModelOperation =
             thinkingLevel: HenaThinkingLevel,
           ) => applyModelThenThinkingLevel(harness, nextModel, thinkingLevel),
         },
-        model,
+        modelSnapshot,
         requestedLevel,
       ).pipe(Effect.uninterruptible),
     );
+  };

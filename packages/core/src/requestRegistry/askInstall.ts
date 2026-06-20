@@ -23,13 +23,7 @@ export const installRequest = <
   input: Input,
   deferred: Deferred.Deferred<Value, Failure>,
 ): AskInstallation<Request, Value, Failure> => {
-  const resolved = store.options.resolveBeforeInstall?.(input);
-  if (resolved !== undefined && Option.isSome(resolved)) {
-    return { _tag: "resolved", value: resolved.value };
-  }
-
   const id = `${store.options.idPrefix}-${store.nextID}`;
-  store.nextID += 1;
   const request = store.options.makeRequest(id, input);
   if (store.closed) {
     return {
@@ -37,6 +31,13 @@ export const installRequest = <
       failure: store.options.rejectOnShutdown(request).failure,
     };
   }
+
+  const resolved = store.options.resolveBeforeInstall?.(input);
+  if (resolved !== undefined && Option.isSome(resolved)) {
+    return { _tag: "resolved", value: resolved.value };
+  }
+
+  store.nextID += 1;
   store.pending.set(id, { deferred, request });
   return { _tag: "installed", deferred, request, requestID: id };
 };

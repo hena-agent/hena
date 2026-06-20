@@ -39,28 +39,26 @@ export const finalizeSettlement = <
   >,
 ): Effect.Effect<boolean, never, never> => {
   const { complete, entry, requestID, settlement, store } = input;
-  return store.lock.withPermit(
-    Effect.sync(() => {
-      if (store.closed || store.settling.get(requestID) !== entry) {
-        return false;
-      }
-      store.cancelled.delete(requestID);
-      return true;
-    }).pipe(
+  return store.lock
+    .withPermit(
+      Effect.sync(() => {
+        if (store.closed || store.settling.get(requestID) !== entry) {
+          return false;
+        }
+        store.settling.delete(requestID);
+        store.cancelled.delete(requestID);
+        return true;
+      }),
+    )
+    .pipe(
       Effect.flatMap((owned) =>
         owned
           ? publishSettlement(store, settlement).pipe(
               Effect.andThen(complete(entry, settlement)),
               Effect.as(true),
-              Effect.ensuring(
-                Effect.sync(() => {
-                  store.settling.delete(requestID);
-                  store.cancelled.delete(requestID);
-                }),
-              ),
             )
           : Effect.succeed(false),
       ),
-    ),
-  );
+      Effect.uninterruptible,
+    );
 };

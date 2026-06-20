@@ -2,6 +2,10 @@ import { Effect, type FileSystem } from "effect";
 import type { PlatformError } from "effect/PlatformError";
 import { compileGlobEffect } from "./globMatch";
 import { grepFileStream } from "./grepFileStream";
+import {
+  collectGrepMatches,
+  makeGrepCollectionState,
+} from "./grepMatchCollector";
 import type { ToolInputError } from "./toolErrors";
 
 export interface GrepMatch {
@@ -48,13 +52,16 @@ export const grepFiles = Effect.fnUntraced(function* (
   limit: number,
 ) {
   const matches: Array<GrepMatch> = [];
+  const state = makeGrepCollectionState();
   let truncated = false;
   for (const file of files) {
     if (matches.length >= limit) {
       return { matches, truncated: true } satisfies GrepResult;
     }
     const result = yield* grepFile(fs, pattern, file, limit - matches.length);
-    matches.push(...result.matches);
+    if (!collectGrepMatches(matches, state, result.matches)) {
+      return { matches, truncated: true } satisfies GrepResult;
+    }
     if (result.truncated) {
       truncated = true;
       if (matches.length >= limit) {

@@ -33,6 +33,9 @@ export interface PendingRequestRegistryOptions<
   Event,
 > {
   readonly askedEvent: (request: Request) => Event;
+  readonly guardInstall?: <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<A, E, R>;
   readonly idPrefix: string;
   readonly makeRequest: (id: string, input: Input) => Request;
   readonly resolveBeforeInstall?: (input: Input) => Option.Option<Value>;

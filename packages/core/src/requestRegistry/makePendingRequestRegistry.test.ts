@@ -1,5 +1,13 @@
 import { assert, it } from "@effect/vitest";
-import { Deferred, Effect, Fiber, PubSub, Semaphore, Stream } from "effect";
+import {
+  Deferred,
+  Effect,
+  Fiber,
+  Option,
+  PubSub,
+  Semaphore,
+  Stream,
+} from "effect";
 
 import { closeStore } from "./lifecycle";
 import { makePendingRequestRegistry } from "./makePendingRequestRegistry";
@@ -110,6 +118,20 @@ it.effect("fails entries and rejects pending requests on scope close", () =>
 it.effect("fails new requests after the registry scope closes", () =>
   Effect.gen(function* () {
     const registry = yield* Effect.scoped(makeRegistry());
+    const exit = yield* registry.ask({ label: "late" }).pipe(Effect.exit);
+
+    assert.strictEqual(exit._tag, "Failure");
+  }),
+);
+
+it.effect("fails closed requests before resolve-before-install", () =>
+  Effect.gen(function* () {
+    const registry = yield* Effect.scoped(
+      makePendingRequestRegistry<Input, Request, string, string, Event>({
+        ...registryOptions,
+        resolveBeforeInstall: () => Option.some("cached"),
+      }),
+    );
     const exit = yield* registry.ask({ label: "late" }).pipe(Effect.exit);
 
     assert.strictEqual(exit._tag, "Failure");

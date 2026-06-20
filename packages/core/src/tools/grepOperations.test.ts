@@ -101,6 +101,18 @@ it.effect("continues after truncated grep candidates", () =>
   ),
 );
 
+it.effect("caps collected grep output by bytes", () =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const result = yield* grepFiles(fs, /needle/, ["/workspace/a.ts"], 10);
+    const [match] = result.matches;
+
+    assert.ok(match !== undefined);
+    assert.strictEqual(result.truncated, true);
+    assert.ok(match.text.length < 1024 * 1024);
+  }).pipe(Effect.provide(fileLayer(() => `needle${"x".repeat(1024 * 1024)}`))),
+);
+
 it.effect("stops grepping empty-line files at the input byte cap", () => {
   let pulls = 0;
   const chunk = new TextEncoder().encode("\n".repeat(600_000));

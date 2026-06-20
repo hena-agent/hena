@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, type Semaphore } from "effect";
 
 import type { PendingRequestSuccess } from "../requestRegistry/types";
 import { isAlwaysGranted, rememberAlwaysGrant } from "./request";
@@ -74,14 +74,22 @@ const grantPendingAlways = Effect.fnUntraced(function* (
 export const makeGrant = (
   state: PermissionState,
   registry: PermissionRegistry,
+  policyLock: Semaphore.Semaphore,
 ): PermissionServiceShape["grant"] =>
   Effect.fnUntraced(function* (input: PermissionGrant) {
-    yield* registry.succeed(
+    const grantCurrent = registry.succeed(
       input.requestID,
       new PermissionRequestNotFound({ requestID: input.requestID }),
       (request) => Effect.succeed(grantRequest(state, input, request)),
     );
-    if (input.scope === "always") {
-      yield* grantPendingAlways(state, registry);
+    if (input.scope !== "always") {
+      return yield* grantCurrent;
     }
+
+    return yield* policyLock.withPermit(
+      grantCurrent.pipe(
+        Effect.andThen(grantPendingAlways(state, registry)),
+        Effect.uninterruptible,
+      ),
+    );
   });

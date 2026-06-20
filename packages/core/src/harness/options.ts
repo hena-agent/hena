@@ -3,10 +3,16 @@ import { Effect } from "effect";
 
 import type { ExecutionEnvironment } from "../execution/ExecutionEnvProvider";
 import type { CredentialResolverShape } from "../model/credentials";
+import { snapshotModel } from "../model/customModel";
 import type {
   HarnessCredentialCallback,
   MakeAgentHarnessOptionsInput,
 } from "./optionsTypes";
+import {
+  snapshotResources,
+  snapshotStreamOptions,
+  snapshotTools,
+} from "./snapshots";
 import { makeHarnessSystemPromptCallback } from "./systemPromptCallback";
 
 interface MakeOptionsFromEnvironmentInput extends MakeAgentHarnessOptionsInput {
@@ -21,16 +27,6 @@ const credentialCallback =
   ): ReturnType<HarnessCredentialCallback> =>
     Effect.runPromise(credentials.getApiKeyAndHeaders(model));
 
-const snapshotResources = (
-  resources: PiAgent.AgentHarnessResources,
-): PiAgent.AgentHarnessResources => ({
-  ...resources,
-  ...(resources.promptTemplates === undefined
-    ? {}
-    : { promptTemplates: [...resources.promptTemplates] }),
-  ...(resources.skills === undefined ? {} : { skills: [...resources.skills] }),
-});
-
 export const makeAgentHarnessOptionsFromEnvironment = (
   input: MakeOptionsFromEnvironmentInput,
 ): PiAgent.AgentHarnessOptions => {
@@ -38,7 +34,7 @@ export const makeAgentHarnessOptionsFromEnvironment = (
   return {
     env: environment.env,
     session: input.session,
-    model: input.model,
+    model: snapshotModel(input.model),
     systemPrompt: makeHarnessSystemPromptCallback(
       input.systemPrompt,
       environment,
@@ -54,10 +50,10 @@ export const makeAgentHarnessOptionsFromEnvironment = (
       : { resources: snapshotResources(input.resources) }),
     ...(input.streamOptions === undefined
       ? {}
-      : { streamOptions: input.streamOptions }),
+      : { streamOptions: snapshotStreamOptions(input.streamOptions) }),
     ...(input.thinkingLevel === undefined
       ? {}
       : { thinkingLevel: input.thinkingLevel }),
-    ...(input.tools === undefined ? {} : { tools: [...input.tools] }),
+    ...(input.tools === undefined ? {} : { tools: snapshotTools(input.tools) }),
   } satisfies PiAgent.AgentHarnessOptions;
 };

@@ -33,9 +33,8 @@ export const closeStore = <
 >(
   store: PendingRequestStore<Input, Request, Value, Failure, Event>,
 ): Effect.Effect<void> =>
-  store.lock.withPermit(
-    closeEntries(store).pipe(
-      Effect.flatMap((entries) => rejectEntries(store, entries)),
-      Effect.andThen(PubSub.shutdown(store.events)),
-    ),
+  store.lock.withPermit(closeEntries(store)).pipe(
+    Effect.flatMap((entries) => rejectEntries(store, entries)),
+    Effect.andThen(PubSub.shutdown(store.events)),
+    Effect.uninterruptible,
   );

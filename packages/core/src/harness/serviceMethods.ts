@@ -1,6 +1,7 @@
 // biome-ignore-all lint/nursery/useExplicitType: HarnessServiceShape constrains each adapter method.
 import type { Effect, Semaphore } from "effect";
 
+import { snapshotModel } from "../model/customModel";
 import type { HarnessServiceError } from "./errors";
 import * as HarnessSnapshots from "./snapshots";
 import { makeSwitchModelOperation } from "./switchModelOperation";
@@ -43,9 +44,9 @@ export const makeHarnessServiceMethods = (
     runners.mutate(harness.compact.bind(harness, instructions)),
   navigateTree: (...args: Args<"navigateTree">) =>
     runners.mutate(harness.navigateTree.bind(harness, ...args)),
-  getModel: () => runners.read(harness.getModel.bind(harness)),
-  setModel: (...args: Args<"setModel">) =>
-    runners.mutate(harness.setModel.bind(harness, ...args)),
+  getModel: () => runners.read(() => snapshotModel(harness.getModel())),
+  setModel: (model) =>
+    runners.mutate(harness.setModel.bind(harness, snapshotModel(model))),
   getThinkingLevel: () => runners.read(harness.getThinkingLevel.bind(harness)),
   setThinkingLevel: (...args: Args<"setThinkingLevel">) =>
     runners.mutate(harness.setThinkingLevel.bind(harness, ...args)),

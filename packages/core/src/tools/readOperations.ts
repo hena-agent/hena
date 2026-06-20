@@ -1,6 +1,6 @@
 import type * as PiAgent from "@earendil-works/pi-agent-core";
 import { Effect, type FileSystem } from "effect";
-
+import { selectDirectoryEntries } from "./directoryEntryBounds";
 import type { ReadToolParameters } from "./ReadTool";
 import type { ReadToolDetails } from "./readDetails";
 import { readLineWindow } from "./readLineWindow";
@@ -8,7 +8,6 @@ import { boundUtf8Text } from "./textBounds";
 
 const maxReadOutputBytes = 1024 * 1024;
 const maxReadLines = 2000;
-const maxDirectoryEntries = 10000;
 
 interface DirectoryText {
   readonly text: string;
@@ -65,10 +64,12 @@ export const readDirectory = Effect.fnUntraced(function* (
   fs: FileSystem.FileSystem,
   path: string,
 ) {
-  const entries = yield* fs.readDirectory(path);
-  const truncatedEntries = entries.length > maxDirectoryEntries;
-  const selected = entries.slice(0, maxDirectoryEntries);
-  const sorted = [...selected].sort((left, right) => left.localeCompare(right));
+  const directoryEntries = selectDirectoryEntries(
+    yield* fs.readDirectory(path),
+  );
+  const sorted = [...directoryEntries.entries].sort((left, right) =>
+    left.localeCompare(right),
+  );
   const output = formatDirectoryEntries(sorted);
   return {
     content: [{ type: "text", text: output.text }],
@@ -76,7 +77,7 @@ export const readDirectory = Effect.fnUntraced(function* (
       path,
       type: "directory",
       entries: sorted.length,
-      truncated: truncatedEntries || output.truncated,
+      truncated: directoryEntries.truncated || output.truncated,
     },
   } satisfies PiAgent.AgentToolResult<ReadToolDetails>;
 });

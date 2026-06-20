@@ -20,6 +20,7 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
   constructor(
     private readonly result: ShellResult | Error,
     private readonly calls: Array<ShellCall>,
+    private readonly streamOutput = true,
   ) {
     super({ cwd: "/workspace" });
   }
@@ -39,7 +40,7 @@ class FakeExecutionEnv extends PiNode.NodeExecutionEnv {
     if (this.result instanceof Error) {
       throw this.result;
     }
-    if (this.result.ok) {
+    if (this.result.ok && this.streamOutput) {
       options?.onStdout?.(this.result.value.stdout);
       options?.onStderr?.(this.result.value.stderr);
     }
@@ -65,8 +66,9 @@ const makeEnvironment = (
 const makeEnvironmentWithResult = (
   result: ShellResult | Error,
   calls: Array<ShellCall>,
+  streamOutput = true,
 ) => {
-  const env = new FakeExecutionEnv(result, calls);
+  const env = new FakeExecutionEnv(result, calls, streamOutput);
   return Layer.succeed(ExecutionEnvironmentService)({
     cwd: "/workspace",
     roots: ["/workspace"],
@@ -160,6 +162,22 @@ it.effect("maps rejected shell executions", () =>
   }).pipe(
     Effect.provide(BashTool.Live),
     Effect.provide(makeEnvironmentWithResult(new Error("boom"), [])),
+    Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
+  ),
+);
+
+it.effect("rejects environments that do not stream shell output", () =>
+  Effect.gen(function* () {
+    const tool = yield* BashTool;
+    const error = yield* tool.execute({ command: "buffer" }).pipe(Effect.flip);
+
+    assert.ok(error instanceof ToolShellError);
+    assert.strictEqual(error.code, "shell_unavailable");
+  }).pipe(
+    Effect.provide(BashTool.Live),
+    Effect.provide(
+      makeEnvironmentWithResult(shellResult("buffered", 0), [], false),
+    ),
     Effect.provide(Layer.succeed(ToolWorkspace)({ cwd: "/workspace" })),
   ),
 );

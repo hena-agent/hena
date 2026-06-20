@@ -74,7 +74,7 @@ it.effect("assembles pi AgentHarnessOptions from core services", () =>
 
       assert.strictEqual(options.env.cwd, cwd);
       assert.strictEqual(options.session, session);
-      assert.strictEqual(options.model, model);
+      assert.deepStrictEqual(options.model, model);
       assert.strictEqual(options.thinkingLevel, "minimal");
       assert.deepStrictEqual(options.tools, [tool]);
       assert.deepStrictEqual(options.activeToolNames, ["echo"]);
@@ -119,26 +119,37 @@ it.effect("assembles pi AgentHarnessOptions from core services", () =>
   ),
 );
 
-it.effect("snapshots resource arrays", () =>
+it.effect("snapshots mutable option DTOs", () =>
   Effect.scoped(
     Effect.gen(function* () {
       const cwd = process.cwd();
       const session = yield* makeSession();
       const skills = [skill];
       const promptTemplates = [promptTemplate];
+      const streamOptions = {
+        headers: { authorization: "Bearer token" },
+        metadata: { trace: "one" },
+      };
       const options = makeAgentHarnessOptionsFromEnvironment({
         environment: makeEnvironment(cwd),
         session,
         model,
         resources: { promptTemplates, skills },
+        streamOptions,
       });
 
       skills.push({ ...skill, name: "mutated" });
       promptTemplates.push({ ...promptTemplate, name: "mutated" });
+      streamOptions.headers.authorization = "mutated";
+      streamOptions.metadata.trace = "mutated";
 
       assert.deepStrictEqual(options.resources, {
         promptTemplates: [promptTemplate],
         skills: [skill],
+      });
+      assert.deepStrictEqual(options.streamOptions, {
+        headers: { authorization: "Bearer token" },
+        metadata: { trace: "one" },
       });
 
       const templateOnly = makeAgentHarnessOptionsFromEnvironment({

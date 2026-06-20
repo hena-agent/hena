@@ -4,6 +4,20 @@ import { installRequest, publishAsked } from "./askInstall";
 import { type PendingRequestStore, rejectEntries } from "./store";
 import { takePending } from "./takePending";
 
+const guardInstall = <
+  Input,
+  Request extends { readonly id: string },
+  Value,
+  Failure,
+  Event,
+  A,
+  E,
+  R,
+>(
+  store: PendingRequestStore<Input, Request, Value, Failure, Event>,
+  effect: Effect.Effect<A, E, R>,
+): Effect.Effect<A, E, R> => store.options.guardInstall?.(effect) ?? effect;
+
 const rejectInterrupted = <
   Input,
   Request extends { readonly id: string },
@@ -36,11 +50,14 @@ export const askPendingRequest = Effect.fnUntraced(function* <
   input: Input,
 ) {
   const deferred = yield* Deferred.make<Value, Failure>();
-  const installation = yield* store.lock.withPermit(
-    Effect.sync(() => installRequest(store, input, deferred)).pipe(
-      Effect.flatMap((next) => publishAsked(store, next)),
-      Effect.uninterruptible,
-    ),
+  const installation = yield* guardInstall(
+    store,
+    store.lock
+      .withPermit(Effect.sync(() => installRequest(store, input, deferred)))
+      .pipe(
+        Effect.flatMap((next) => publishAsked(store, next)),
+        Effect.uninterruptible,
+      ),
   );
 
   if (installation._tag === "closed") {

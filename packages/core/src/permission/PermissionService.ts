@@ -1,4 +1,4 @@
-import { Context, Effect, Layer, Option } from "effect";
+import { Context, Effect, Layer, Option, Semaphore } from "effect";
 
 import { makePendingRequestRegistry } from "../requestRegistry/makePendingRequestRegistry";
 import { makeGrant } from "./grant";
@@ -23,6 +23,10 @@ const makePermissionService = Effect.fnUntraced(function* () {
   const state: PermissionState = {
     alwaysGranted: new Set(),
   };
+  const policyLock = yield* Semaphore.make(1);
+  const guardInstall = <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, R> => policyLock.withPermit(effect);
   const registry = yield* makePendingRequestRegistry<
     PermissionAskInput,
     PermissionRequest,
@@ -31,6 +35,7 @@ const makePermissionService = Effect.fnUntraced(function* () {
     PermissionEvent
   >({
     idPrefix: "per",
+    guardInstall,
     makeRequest,
     resolveBeforeInstall: (input: PermissionAskInput) =>
       isAlwaysGranted(state.alwaysGranted, input)
@@ -50,7 +55,7 @@ const makePermissionService = Effect.fnUntraced(function* () {
     ask,
     deny: makeDeny(registry),
     events: registry.events,
-    grant: makeGrant(state, registry),
+    grant: makeGrant(state, registry, policyLock),
     list: registry.list,
   } satisfies PermissionServiceShape;
 });

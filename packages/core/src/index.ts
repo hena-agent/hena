@@ -1,5 +1,53 @@
+// biome-ignore-all format: compact public package entrypoint
 import { Effect } from "effect";
 
 export const corePackageName = "@hena-dev/core";
-
 export const corePackageNameEffect = Effect.succeed(corePackageName);
+
+export { autoCompactAfterTurn, COMPACTION_BUFFER, getCompactionReserve, getContextUsage, shouldAutoCompact } from "./compaction/autoCompaction";
+export type { AutoCompactionConfig, AutoCompactionInput, AutoCompactionResult, AutoCompactionRuntime, ContextUsage, ContextUsageInput } from "./compaction/types";
+export type { ExecutionEnvironment, ExecutionEnvProviderShape, ExecutionEnvRequest } from "./execution/ExecutionEnvProvider";
+export { ExecutionEnvProvider, ExecutionEnvProviderError, makeCloudExecutionEnvProvider, makeLocalExecutionEnvProvider } from "./execution/ExecutionEnvProvider";
+export type { HarnessEventEnvelope } from "./harness/eventSchema";
+export { HarnessEventDTO, toHarnessEventDTO } from "./harness/eventSchema";
+export type { HarnessEventBridge, HarnessEventSource } from "./harness/events";
+export { attachHarnessEventBridge, makeHarnessEventBridge } from "./harness/events";
+export { HarnessService } from "./harness/HarnessService";
+export { makeHarnessService } from "./harness/makeHarnessService";
+export { makeAgentHarnessOptions } from "./harness/options";
+export type { AgentHarnessExecutionConfig, HarnessCredentialCallback, HarnessSystemPromptCallback, HarnessSystemPromptConfig, MakeAgentHarnessOptionsInput } from "./harness/optionsTypes";
+export type { HarnessLike, HarnessServiceShape } from "./harness/types";
+export type { ApiKeyAndHeaders, CredentialResolverConfig, CredentialResolverShape, CredentialSource } from "./model/credentials";
+export { makeCredentialResolver } from "./model/credentials";
+export { ModelNotFoundError } from "./model/errors";
+export { makeModelRegistry } from "./model/registry";
+export type { HarnessModelRuntime, SwitchHarnessModelResult } from "./model/thinking";
+export { resolveThinkingLevel, switchHarnessModel } from "./model/thinking";
+export type { CustomModelConfig, HenaModel, HenaThinkingLevel, ModelRef, ModelRegistryConfig, ModelRegistryShape } from "./model/types";
+export type { PathGuardAuthorization, PathGuardAuthorizeOptions, PathGuardConfig, PathGuardShape, PathGuardTargetKind } from "./path/PathGuard";
+export { PathGuard } from "./path/PathGuard";
+export { PermissionService } from "./permission/PermissionService";
+export { PermissionDeniedError, PermissionID, PermissionRequestNotFound } from "./permission/schema";
+export type { PermissionAskInput, PermissionServiceShape } from "./permission/types";
+export { QuestionService } from "./question/QuestionService";
+export { QuestionID, QuestionInvalidReplyError, QuestionRejectedError, QuestionRequestNotFound } from "./question/schema";
+export type { AskInput, QuestionServiceShape } from "./question/types";
+export { makeSessionRuntimeLayer } from "./session/runtimeLayer";
+export type { AgentHarnessFactoryShape, SessionRuntimeConfig, SessionRuntimeHarness, SessionRuntimeLoaderShape, SessionRuntimeShape } from "./session/SessionRuntime";
+export { AgentHarnessFactory, SessionRuntime, SessionRuntimeLoader, SessionRuntimeMap } from "./session/SessionRuntime";
+export type { ProjectInstructionDiscoveryInput } from "./systemPrompt/projectInstructions";
+export { collectProjectInstructions } from "./systemPrompt/projectInstructions";
+export type { ProjectInstruction, SystemPromptInput } from "./systemPrompt/systemPrompt";
+export { buildSystemPrompt, DEFAULT_SYSTEM_PROMPT } from "./systemPrompt/systemPrompt";
+export type { ToolRef as ToolRefType } from "./toolRef";
+export { ToolRef } from "./toolRef";
+export { BashTool, makeBashAgentTool } from "./tools/BashTool";
+export { EditTool, makeEditAgentTool } from "./tools/EditTool";
+export { GlobTool, makeGlobAgentTool } from "./tools/GlobTool";
+export { GrepTool, makeGrepAgentTool } from "./tools/GrepTool";
+export { makeQuestionAgentTool, QuestionTool } from "./tools/QuestionTool";
+export { makeReadAgentTool, ReadTool } from "./tools/ReadTool";
+export type { AgentToolDefinition, AgentToolExecuteInput, CoreAgentTool, ToolInvocationContext } from "./tools/schema";
+export { makeAgentTool, toolReferenceFromContext } from "./tools/schema";
+export { makeWebfetchAgentTool, WebfetchTool } from "./tools/WebfetchTool";
+export { makeWriteAgentTool, WriteTool } from "./tools/WriteTool";

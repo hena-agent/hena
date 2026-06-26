@@ -25,7 +25,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:",
-    "vitest": "4.1.8"
+    "vitest": "catalog:"
   },
   "dependencies": {
     "effect": "4.0.0-beta.83"

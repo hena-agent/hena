@@ -1,4 +1,4 @@
-import { assert, it } from "@effect/vitest";
+import { assert, it } from "vitest";
 
 import { henaPackageName } from "./index";
 

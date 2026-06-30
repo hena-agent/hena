@@ -36,7 +36,7 @@ pnpm-debug.log*
 .entire/tmp/
 .entire/logs/
 
-# Skill reference checkouts (e.g. effect skill clones effect-smol here)
+# Skill reference checkouts
 .agents/references/
 
 # Docs
